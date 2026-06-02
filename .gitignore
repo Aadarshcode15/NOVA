@@ -1,0 +1,33 @@
+# Virtual Environment
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# Environment files
+.env
+
+# Secret keys
+.webui_secret_key
+
+# Database / temp
+*.db
+*.sqlite3
+
+# OS files
+.DS_Store
+Thumbs.db
+
+#others
+kokoro-v1.0.onnx
+Pywhatkit_DB.txt
+voices-v1.0.bin
+.cache
+
+contacts.json
+long_term_memory.json

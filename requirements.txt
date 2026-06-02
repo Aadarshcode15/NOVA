@@ -1,0 +1,50 @@
+# AI
+google-generativeai
+groq
+ollama
+
+# Voice
+SpeechRecognition
+sounddevice
+edge-tts
+pygame
+
+# UI
+PyQt6
+
+# System
+pyautogui
+psutil
+screen-brightness-control
+pyperclip
+pycaw
+
+# Notifications
+win10toast
+
+# Web / Browser
+requests
+playwright
+beautifulsoup4
+duckduckgo-search
+
+# Spotify
+spotipy
+
+# WhatsApp
+pywhatkit
+
+# YouTube
+youtube-transcript-api
+yt-dlp
+
+# Files
+send2trash
+Pillow
+
+# Face (optional)
+opencv-contrib-python
+numpy
+
+# Utils
+python-dotenv

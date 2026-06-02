@@ -1,0 +1,23 @@
+{
+  "identity": {
+    "my": {
+      "value": "my name is raj",
+      "updated": "2026-06-03"
+    }
+  },
+  "preferences": {
+    "i": {
+      "value": "i like coding",
+      "updated": "2026-06-03"
+    }
+  },
+  "projects": {},
+  "relationships": {},
+  "wishes": {},
+  "notes": {
+    "i": {
+      "value": "i live in mumbai",
+      "updated": "2026-06-03"
+    }
+  }
+}
