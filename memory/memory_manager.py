@@ -8,6 +8,56 @@ _lock = Lock()
 MAX_VALUE_LENGTH = 380
 MEMORY_MAX_CHARS = 2200
 
+# ── ADD THIS ENTIRE BLOCK above _empty_memory() ─────────────
+
+import re as _re
+import hashlib as _hashlib
+import time as _time
+
+_MEMORY_STOPWORDS = frozenset({
+    'i', 'my', 'me', 'the', 'a', 'an', 'is', 'am', 'are', 'was', 'were',
+    'have', 'has', 'had', 'like', 'love', 'hate', 'want', 'live', 'work',
+    'that', 'this', 'it', 'in', 'on', 'at', 'to', 'for', 'of', 'and',
+    'so', 'do', 'did', 'be', 'been', 'being', 'also', 'just', 'really'
+})
+
+def _make_memory_key(text: str) -> str:
+    """
+    Generate a collision-resistant, human-readable memory key.
+    'I like coding'    → 'like_coding_3f2a'
+    'I live in Mumbai' → 'live_mumbai_9c1e'
+    'My name is Raj'   → 'name_raj_7b4d'
+    """
+    words = _re.sub(r"[^\w\s]", "", text.lower()).split()
+    meaningful = [w for w in words if w not in _MEMORY_STOPWORDS and len(w) > 2]
+    base = "_".join(meaningful[:3]) if meaningful else "note"
+    suffix = _hashlib.md5(f"{text}{_time.time()}".encode()).hexdigest()[:4]
+    return f"{base}_{suffix}"
+
+
+def migrate_v1_to_v2(memory: dict) -> dict:
+    """
+    One-time migration: v1 had a bug where all entries in a category
+    collapsed to key='i' or 'my' (stopwords). This re-keys them safely.
+    Call once at startup — safe to call multiple times (idempotent).
+    """
+    changed = False
+    for cat, items in memory.items():
+        if not isinstance(items, dict):
+            continue
+        to_rekey = {k: v for k, v in items.items() if k in _MEMORY_STOPWORDS}
+        for old_key, entry in to_rekey.items():
+            val = entry.get("value", "") if isinstance(entry, dict) else str(entry)
+            new_key = _make_memory_key(val)
+            memory[cat][new_key] = entry
+            del memory[cat][old_key]
+            print(f"[Memory Migration] {cat}/{old_key} → {cat}/{new_key}: {val[:40]}")
+            changed = True
+    if changed:
+        print("[Memory Migration] Done. Keys updated.")
+    return memory
+
+# ── END OF NEW BLOCK ─────────────────────────────────────────
 def _empty_memory() -> dict:
     return {
         "identity":      {},

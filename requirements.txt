@@ -1,50 +1,52 @@
-# AI
-google-generativeai
+# ── AI Engines ──────────────────────────────────────────────
+google-genai                 # CHANGED: was google-generativeai (wrong package)
 groq
 ollama
 
-# Voice
+# ── Voice / Audio ───────────────────────────────────────────
 SpeechRecognition
 sounddevice
 edge-tts
 pygame
+kokoro-onnx                  # ADDED: TTS model (was missing)
+soundfile                    # ADDED: audio I/O in voice.py (was missing)
 
-# UI
+# ── UI ──────────────────────────────────────────────────────
 PyQt6
 
-# System
+# ── System ──────────────────────────────────────────────────
 pyautogui
 psutil
 screen-brightness-control
 pyperclip
 pycaw
 
-# Notifications
+# ── Notifications ───────────────────────────────────────────
 win10toast
 
-# Web / Browser
+# ── Web / Search ────────────────────────────────────────────
 requests
-playwright
 beautifulsoup4
 duckduckgo-search
+# playwright                 # REMOVED: premature — added back in Sprint 3
 
-# Spotify
+# ── Spotify ─────────────────────────────────────────────────
 spotipy
 
-# WhatsApp
+# ── WhatsApp ────────────────────────────────────────────────
 pywhatkit
 
-# YouTube
+# ── YouTube ─────────────────────────────────────────────────
 youtube-transcript-api
 yt-dlp
 
-# Files
+# ── Files / Images ──────────────────────────────────────────
 send2trash
 Pillow
 
-# Face (optional)
+# ── Face Recognition (optional) ─────────────────────────────
 opencv-contrib-python
 numpy
 
-# Utils
+# ── Utils ───────────────────────────────────────────────────
 python-dotenv

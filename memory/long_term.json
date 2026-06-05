@@ -1,21 +1,26 @@
 {
   "identity": {
-    "my": {
+    "name_raj_f244": {
       "value": "my name is raj",
       "updated": "2026-06-03"
     }
   },
   "preferences": {
-    "i": {
+    "coding_f928": {
       "value": "i like coding",
       "updated": "2026-06-03"
     }
   },
   "projects": {},
-  "relationships": {},
+  "relationships": {
+    "friend_aditi_18d3": {
+      "value": "my friend aditi",
+      "updated": "2026-06-05"
+    }
+  },
   "wishes": {},
   "notes": {
-    "i": {
+    "mumbai_ec7b": {
       "value": "i live in mumbai",
       "updated": "2026-06-03"
     }

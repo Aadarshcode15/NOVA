@@ -10,6 +10,10 @@ def on_command(assistant: str, command: str) -> None:
     route(assistant, command)
 
 def main():
+    # ── One-time memory migration (safe to run on every startup) ──
+    from memory.memory_manager import load_memory, save_memory, migrate_v1_to_v2
+    save_memory(migrate_v1_to_v2(load_memory()))
+
     # Register command callback
     set_command_callback(on_command)
 

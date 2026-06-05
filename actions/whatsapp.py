@@ -1,8 +1,10 @@
 # actions/whatsapp.py
 import json
+import re
 import pywhatkit
 from core.voice import speak
 from config.settings import CONTACTS_FILE
+
 
 def _load_contacts() -> dict:
     try:
@@ -12,7 +14,9 @@ def _load_contacts() -> dict:
         print(f"[WhatsApp] Contacts load error: {e}")
     return {}
 
+
 TRIGGERS = ("whatsapp", "message", "send", "text")
+
 
 def handle_whatsapp(command: str) -> bool:
     c = command.lower()
@@ -24,11 +28,13 @@ def handle_whatsapp(command: str) -> bool:
         speak("No contacts found. Please add contacts to config/contacts.json.")
         return True
 
-    # ── Find contact ──
+    # ── Find contact — whole-word match only ──────────────────
+    # OLD BUG: "ag" in "message" matched "messAGe"
+    # FIX: \b word boundary ensures "ag" only matches as standalone word
     contact_name   = None
     contact_number = None
     for name, number in contacts.items():
-        if name.lower() in c:
+        if re.search(r'\b' + re.escape(name.lower()) + r'\b', c):
             contact_name   = name
             contact_number = number
             break
@@ -37,17 +43,27 @@ def handle_whatsapp(command: str) -> bool:
         speak("I didn't recognise that contact. Please add them to your contacts file.")
         return True
 
-    # ── Extract message ──
-    msg_start = c.find(contact_name.lower()) + len(contact_name)
-    message   = command[msg_start:].strip()
+    # ── Extract message ───────────────────────────────────────
+    # Find where the contact name ends in the string (using lowercased c,
+    # but positions are identical in original command since lower() keeps length)
+    match = re.search(r'\b' + re.escape(contact_name.lower()) + r'\b', c)
+    if not match:
+        speak(f"What would you like to say to {contact_name}?")
+        return True
 
+    # Slice original command from after the contact name
+    after_contact = command[match.end():].strip()
+
+    # Strip connector words at the start of the message
     for prefix in sorted([
         "saying that", "saying", "to say that", "to say",
         "with the message", "with", "that", ":"
     ], key=len, reverse=True):
-        if message.lower().startswith(prefix):
-            message = message[len(prefix):].strip()
+        if after_contact.lower().startswith(prefix):
+            after_contact = after_contact[len(prefix):].strip()
             break
+
+    message = after_contact.strip()
 
     if not message:
         speak(f"What would you like to say to {contact_name}?")

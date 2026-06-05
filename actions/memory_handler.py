@@ -1,4 +1,6 @@
 # actions/memory_handler.py
+from PIL.Image import item
+
 from core.voice import speak
 from memory.memory_manager import (
     update_memory, forget_memory, clear_memory,
@@ -89,8 +91,10 @@ def handle_memory(command: str) -> bool:
             speak("What would you like me to remember?")
             return True
 
+        # REPLACE WITH:
+        from memory.memory_manager import _make_memory_key
         cat = _detect_category(item)
-        key = item.split()[0].lower().replace("'", "").replace(",", "") if item.split() else "note"
+        key = _make_memory_key(item)
         update_memory(cat, key, item)
         speak("Got it. I will remember that.")
         return True

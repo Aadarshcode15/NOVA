@@ -105,48 +105,28 @@ def route(assistant: str, command: str) -> None:
         if _handle_engine_switch(c):     return
         if _handle_time_date(c):         return
 
-        # ── Memory ──
-        if _memory()(c):                 return
+        # ── Handlers that need ORIGINAL casing (proper nouns, names, paths) ──
+        if _memory()(command):           return   # "Remember my friend Priya"
+        if _whatsapp()(command):         return   # contact name lookup
+        if _reminder()(command):         return   # time expressions
+        if _code()(command):             return   # file names on desktop
+        if _files()(command):            return   # file/folder names
 
-        # ── System ──
+        # ── Handlers fine with lowercase ──
         if _sys()(c):                    return
-
-        # ── Spotify ──
         if _spotify()(c):                return
-
-        # ── WhatsApp ──
-        if _whatsapp()(c):               return
-
-        # ── Reminder ──
-        if _reminder()(c):               return
-
-        # ── Todo ──
         if _todo()(c):                   return
 
-        # ── Weather ──
         handle_weather, handle_news = _weather_news()
         if handle_weather(c):            return
         if handle_news(c):               return
 
-        # ── Screen Vision ──
         if _vision()(c):                 return
-
-        # ── YouTube ──
         if _youtube()(c):                return
-
-        # ── Files ──
-        if _files()(c):                  return
-
-        # ── Code ──
-        if _code()(c):                   return
-
-        # ── Desktop ──
         if _desktop()(c):                return
-
-        # ── Web Search ──
         if _search()(c):                 return
 
-        # ── AI Fallback ──
+        # ── AI Fallback — always use original command ──
         response = query(command, assistant)
         speak(response, assistant)
 
