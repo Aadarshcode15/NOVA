@@ -27,7 +27,7 @@ win10toast
 # ── Web / Search ────────────────────────────────────────────
 requests
 beautifulsoup4
-duckduckgo-search
+ddgs
 # playwright                 # REMOVED: premature — added back in Sprint 3
 
 # ── Spotify ─────────────────────────────────────────────────

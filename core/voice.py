@@ -107,28 +107,30 @@ def _clean_for_tts(text: str) -> str:
 
 def _speak_kokoro(text: str, voice_id: str) -> bool:
     global _kokoro_model
+    # Lock guards model init only — TTS worker is the sole caller of this function
     with _kokoro_lock:
         if _kokoro_model is None:
             if not _init_kokoro():
                 return False
-        try:
-            clean = _clean_for_tts(text)
-            samples, sr_rate = _kokoro_model.create(
-                clean, voice=voice_id, speed=1.0, lang="en-us"
-            )
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
-                tmp = f.name
-            sf.write(tmp, samples, sr_rate)
-            pygame.mixer.music.load(tmp)
-            pygame.mixer.music.play()
-            while pygame.mixer.music.get_busy():
-                time.sleep(0.05)
-            pygame.mixer.music.unload()
-            os.remove(tmp)
-            return True
-        except Exception as e:
-            print(f"[Kokoro Error] {e}")
-            return False
+    # Pygame operations outside the lock — no contention since worker is sole caller
+    try:
+        clean = _clean_for_tts(text)
+        samples, sr_rate = _kokoro_model.create(
+            clean, voice=voice_id, speed=1.0, lang="en-us"
+        )
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
+            tmp = f.name
+        sf.write(tmp, samples, sr_rate)
+        pygame.mixer.music.load(tmp)
+        pygame.mixer.music.play()
+        while pygame.mixer.music.get_busy():
+            time.sleep(0.05)
+        pygame.mixer.music.unload()
+        os.remove(tmp)
+        return True
+    except Exception as e:
+        print(f"[Kokoro Error] {e}")
+        return False
 
 # ── Edge TTS fallback ──────────────────────────────────────
 def _speak_edge(text: str, voice: str) -> None:
@@ -152,21 +154,63 @@ def _speak_edge(text: str, voice: str) -> None:
         print(f"[Edge TTS Error] {e}")
 
 # ── Main speak ─────────────────────────────────────────────
+# ── TTS Queue — non-blocking speak() ───────────────────────
+import queue as _queue
+
 pygame.mixer.init()
 
+_tts_queue:  _queue.Queue = _queue.Queue()
+_tts_thread: threading.Thread = None
+
+
+def _tts_worker() -> None:
+    """
+    Dedicated TTS thread. Sole owner of pygame.mixer.
+    Drains the queue one item at a time — no race conditions possible.
+    """
+    while True:
+        try:
+            text, asst = _tts_queue.get(timeout=1.0)
+        except _queue.Empty:
+            continue
+
+        kokoro_v, edge_v = get_voice_ids(asst)
+        who = NOVA_NAME if asst == "nova" else SORA_NAME
+        print(f"[{who}] {text}")
+        set_state(VoiceState.SPEAKING)
+
+        try:
+            if not _speak_kokoro(text, kokoro_v):
+                _speak_edge(text, edge_v)
+        except Exception as e:
+            print(f"[TTS Worker Error] {e}")
+        finally:
+            set_state(VoiceState.IDLE)
+            _tts_queue.task_done()   # signals queue.join() that item is done
+
+
+def _start_tts_worker() -> None:
+    """Start the TTS worker thread once. Safe to call multiple times."""
+    global _tts_thread
+    if _tts_thread and _tts_thread.is_alive():
+        return
+    _tts_thread = threading.Thread(target=_tts_worker, daemon=True, name="TTS-Worker")
+    _tts_thread.start()
+    print("[TTS] Worker thread started.")
+
+
 def speak(text: str, assistant: str = None) -> None:
-    asst             = (assistant or get_assistant()).lower()
-    who              = NOVA_NAME if asst == "nova" else SORA_NAME
-    kokoro_v, edge_v = get_voice_ids(asst)
+    """
+    Non-blocking. Enqueues text and returns immediately.
+    Audio plays from the dedicated TTS worker thread.
+    UI transcript fires instantly without waiting for audio.
+    """
+    if not text or not text.strip():
+        return
+    asst = (assistant or get_assistant()).lower()
+    _fire("response", {"who": asst, "text": text})   # UI updates instantly
+    _tts_queue.put((text, asst))
 
-    print(f"[{who}] {text}")
-    set_state(VoiceState.SPEAKING)
-    _fire("response", {"who": asst, "text": text})
-
-    if not _speak_kokoro(text, kokoro_v):
-        _speak_edge(text, edge_v)
-
-    set_state(VoiceState.IDLE)
 
 def speak_nova(text: str) -> None: speak(text, "nova")
 def speak_sora(text: str) -> None: speak(text, "sora")
@@ -220,12 +264,13 @@ def audio_loop() -> None:
 
     print("[Voice] Calibrating microphone...")
     calibrate_mic()
-    threading.Thread(target=_init_kokoro, daemon=True).start()
+    _start_tts_worker()                                          # start TTS thread first
+    threading.Thread(target=_init_kokoro, daemon=True).start()  # pre-load Kokoro model
 
     try:
-        speak_nova("N.O.V.A online. I am listening.")
-        time.sleep(0.5)
-        flush_mic(1.2)
+        speak_nova("Neural Operative Voice Assistant online. I am ready for your Command.")
+        _tts_queue.join()   # block audio_loop until startup message finishes playing
+        flush_mic(0.5)      # clear any mic noise from the startup sound
     except Exception as e:
         print(f"[Startup Error] {e}")
 

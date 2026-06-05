@@ -39,9 +39,8 @@ def handle_search(command: str) -> bool:
 
         speak(f"Let me find that for you.")
         try:
-            from duckduckgo_search import DDGS
-            with DDGS() as ddgs:
-                results = list(ddgs.text(search_q, max_results=3))
+            from ddgs import DDGS
+            results = list(DDGS().text(search_q, max_results=3))
             if results:
                 context = "\n".join([r.get("body", "") for r in results])
                 answer  = query(
@@ -56,6 +55,5 @@ def handle_search(command: str) -> bool:
         except Exception as e:
             print(f"[Search Error] {e}")
             speak("Sorry, I couldn't complete that search.")
-        return True
 
     return False
