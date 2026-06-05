@@ -2,6 +2,7 @@
 import webbrowser
 from core.voice import speak
 from core.engine import query
+from core.logger import log
 
 TRIGGERS = (
     "youtube", "play video", "watch", "video of",
@@ -58,7 +59,7 @@ def handle_youtube(command: str) -> bool:
             )
             speak(summary)
         except Exception as e:
-            print(f"[YouTube Summarize Error] {e}")
+            log.error(f"[YouTube Summarize Error] {e}")
             speak("Sorry, I couldn't get the transcript for that video.")
         return True
 

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from core.voice import speak
 from config.settings import REMINDER_DIR
+from core.logger import log
 
 def _sanitise(text: str) -> str:
     return (
@@ -72,7 +73,7 @@ try:
     t.show_toast("NOVA Reminder", "{_sanitise(message)}", duration=10, threaded=True)
     time.sleep(11)
 except Exception as e:
-    print(e)
+    log.info(e)
 try:
     import winsound
     winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
@@ -91,12 +92,12 @@ except Exception:
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            print(f"[Reminder] schtasks error: {result.stderr}")
+            log.error(f"[Reminder] schtasks error: {result.stderr}")
             return False
-        print(f"[Reminder] Created: {task_name} at {dt}")
+        log.info(f"[Reminder] Created: {task_name} at {dt}")
         return True
     except Exception as e:
-        print(f"[Reminder] Error: {e}")
+        log.error(f"[Reminder] Error: {e}")
         return False
 
 TRIGGERS = ("remind me", "set a reminder", "set reminder", "reminder")

@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 from core.voice import speak
 from core.engine import query
+from core.logger import log
 
 TRIGGERS = (
     "file", "folder", "directory", "create file", "move file",
@@ -50,7 +51,7 @@ def handle_files(command: str) -> bool:
                     speak(f"The {loc} folder has {len(files)} items. First ones: {', '.join(names)}.")
                 except Exception as e:
                     speak(f"Couldn't read the {loc} folder.")
-                    print(f"[Files Error] {e}")
+                    log.error(f"[Files Error] {e}")
                 return True
         speak("Which folder? Try desktop, downloads, or documents.")
         return True
@@ -84,7 +85,7 @@ def handle_files(command: str) -> bool:
             else:
                 speak(f"Couldn't find any file named {query_str}.")
         except Exception as e:
-            print(f"[Find File Error] {e}")
+            log.error(f"[Find File Error] {e}")
             speak("File search failed.")
         return True
 
@@ -105,7 +106,7 @@ def handle_files(command: str) -> bool:
             fpath.touch()
             speak(f"Created {fname} on your desktop.")
         except Exception as e:
-            print(f"[Create File Error] {e}")
+            log.error(f"[Create File Error] {e}")
             speak(f"Couldn't create {fname}.")
         return True
 
@@ -126,7 +127,7 @@ def handle_files(command: str) -> bool:
             fpath.mkdir(parents=True, exist_ok=True)
             speak(f"Created folder {fname} on your desktop.")
         except Exception as e:
-            print(f"[Create Folder Error] {e}")
+            log.error(f"[Create Folder Error] {e}")
             speak(f"Couldn't create folder {fname}.")
         return True
 
@@ -156,7 +157,7 @@ def handle_files(command: str) -> bool:
             else:
                 speak(f"Couldn't find {fname}.")
         except Exception as e:
-            print(f"[Read File Error] {e}")
+            log.error(f"[Read File Error] {e}")
             speak(f"Couldn't read {fname}.")
         return True
 

@@ -1,0 +1,8 @@
+00:46:26  INFO      Session log: session_20260606_004626.log
+00:46:26  INFO      =======================================================
+00:46:26  INFO      NOVA STARTING UP
+00:46:26  INFO      =======================================================
+00:46:26  INFO      [Voice] Calibrating microphone...
+00:46:27  INFO      [TTS] Worker thread started.
+00:46:40  INFO      [Voice] Heard: open file explorer
+00:46:40  INFO      [Router] NOVA → open file explorer

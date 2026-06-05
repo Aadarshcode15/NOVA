@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 from core.voice import speak
 from core.engine import query
+from core.logger import log
 
 TRIGGERS = (
     "write code", "write a code", "create code", "generate code",
@@ -51,7 +52,7 @@ def handle_code(command: str) -> bool:
             fpath.write_text(code, encoding="utf-8")
             speak(f"Done. I've written the code and saved it as {filename} on your desktop.")
         except Exception as e:
-            print(f"[Code Write Error] {e}")
+            log.error(f"[Code Write Error] {e}")
             speak("Sorry, I couldn't write that code.")
         return True
 
@@ -102,7 +103,7 @@ def handle_code(command: str) -> bool:
         except subprocess.TimeoutExpired:
             speak("The script took too long and was stopped.")
         except Exception as e:
-            print(f"[Run Code Error] {e}")
+            log.error(f"[Run Code Error] {e}")
             speak("Couldn't run that script.")
         return True
 
@@ -141,7 +142,7 @@ def handle_code(command: str) -> bool:
             )
             speak(explanation)
         except Exception as e:
-            print(f"[Explain Code Error] {e}")
+            log.error(f"[Explain Code Error] {e}")
             speak("Couldn't explain that code.")
         return True
 
@@ -164,7 +165,7 @@ def handle_code(command: str) -> bool:
             fpath.write_text(fixed, encoding="utf-8")
             speak(f"Done. I've fixed the code and saved it back to {fpath.name}.")
         except Exception as e:
-            print(f"[Fix Code Error] {e}")
+            log.error(f"[Fix Code Error] {e}")
             speak("Couldn't fix that code.")
         return True
 

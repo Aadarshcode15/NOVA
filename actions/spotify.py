@@ -3,6 +3,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from core.voice import speak
 from config.settings import SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT
+from core.logger import log
 
 _sp        = None
 _sp_failed = False
@@ -20,7 +21,7 @@ def _get_spotify():
                 scope="user-modify-playback-state user-read-playback-state user-read-currently-playing"
             ))
         except Exception as e:
-            print(f"[Spotify Init Error] {e}")
+            log.error(f"[Spotify Init Error] {e}")
             _sp_failed = True
     return _sp
 
@@ -108,9 +109,9 @@ def handle_spotify(command: str) -> bool:
                 speak(f"Couldn't find {query} on Spotify.")
 
     except spotipy.exceptions.SpotifyException as e:
-        print(f"[Spotify Error] {e}")
+        log.error(f"[Spotify Error] {e}")
         speak("Spotify error. Make sure Spotify is open on a device.")
     except Exception as e:
-        print(f"[Spotify Error] {e}")
+        log.error(f"[Spotify Error] {e}")
         speak("Something went wrong with Spotify.")
     return True

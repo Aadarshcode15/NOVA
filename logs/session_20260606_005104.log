@@ -1,0 +1,84 @@
+00:51:04  INFO      Session log: session_20260606_005104.log
+00:51:04  INFO      =======================================================
+00:51:04  INFO      NOVA STARTING UP
+00:51:04  INFO      =======================================================
+00:51:04  INFO      [Voice] Calibrating microphone...
+00:51:05  INFO      [TTS] Worker thread started.
+00:51:24  INFO      [Voice] Heard: sora
+00:51:24  INFO      [Engine] Active assistant → SORA (history cleared)
+00:51:35  INFO      [Voice] Heard: what do you know about me
+00:51:35  INFO      [Router] SORA → what do you know about me
+00:52:04  INFO      [Voice] Heard: switch to hindi
+00:52:19  INFO      [Voice] Heard: mere liye spotify open karo
+00:52:19  INFO      [Router] SORA → mere liye spotify open karo
+00:52:33  INFO      [Voice] Heard: kya tum youtube per techno gamer search kar sakte ho
+00:52:33  INFO      [Router] SORA → kya tum youtube per techno gamer search kar sakte ho
+00:53:01  INFO      [Voice] Heard: mujhe batao aaj ka vedar kaisa hai
+00:53:01  INFO      [Router] SORA → mujhe batao aaj ka vedar kaisa hai
+00:53:01  INFO      [Engine] GROQ | SORA ← Mujhe Batao Aaj Ka vedar Kaisa Hai
+00:53:22  INFO      [Voice] Heard: abhi ka time kya hua hai
+00:53:22  INFO      [Router] SORA → abhi ka time kya hua hai
+00:53:29  INFO      [Voice] Heard: switch to english
+00:53:44  INFO      [Engine] Switched to GEMINI
+00:53:50  INFO      [Voice] Heard: switch to hindi
+00:54:02  INFO      [Voice] Heard: mujhe batao virat kohli ne kitne centuries mare hain
+00:54:02  INFO      [Router] SORA → mujhe batao virat kohli ne kitne centuries mare hain
+00:54:02  INFO      [Engine] GEMINI | SORA ← Mujhe Batao Virat Kohli Ne kitne centuries Mare Hain
+00:54:32  INFO      [Voice] Heard: nova
+00:54:32  INFO      [Engine] Active assistant → NOVA (history cleared)
+00:54:40  INFO      [Voice] Heard: kya tum bhi hindi mein baat kar rahe ho
+00:54:49  INFO      [Voice] Heard: english to english
+00:54:49  INFO      [Router] NOVA → english to english
+00:54:49  INFO      [Engine] GEMINI | NOVA ← English to English
+00:55:13  INFO      [Voice] Heard: which tu english
+00:55:13  INFO      [Router] NOVA → which tu english
+00:55:13  INFO      [Engine] GEMINI | NOVA ← which tu English
+00:55:31  INFO      [Voice] Heard: english mein baat karo
+00:55:42  INFO      [Voice] Heard: what is your limit
+00:55:42  INFO      [Router] NOVA → what is your limit
+00:55:44  INFO      [Engine] GEMINI | NOVA ← Based on this search result, answer in 2-3 spoken sentences 
+00:55:52  INFO      [Engine] GEMINI | NOVA ← what is your limit
+00:56:31  INFO      [Voice] Heard: amazing answer man good job
+00:56:31  INFO      [Router] NOVA → amazing answer man good job
+00:56:31  INFO      [Engine] GEMINI | NOVA ← amazing answer man good job
+00:56:43  INFO      [Engine] Switched to GROQ
+00:56:48  INFO      [Voice] Heard: amazing answer man good job
+00:56:48  INFO      [Router] NOVA → amazing answer man good job
+00:56:48  INFO      [Engine] GROQ | NOVA ← amazing answer man good job
+00:57:06  INFO      [Voice] Heard: on which topic we were talking about
+00:57:06  INFO      [Router] NOVA → on which topic we were talking about
+00:57:06  INFO      [Engine] GROQ | NOVA ← on which topic we were talking about
+00:57:20  INFO      [Voice] Heard: nice you understand
+00:57:20  INFO      [Router] NOVA → nice you understand
+00:57:20  INFO      [Engine] GROQ | NOVA ← nice you understand
+00:57:33  INFO      [Voice] Heard: you are upgrading bro you are upgrading
+00:57:33  INFO      [Router] NOVA → you are upgrading bro you are upgrading
+00:57:33  INFO      [Engine] GROQ | NOVA ← you are upgrading bro you are upgrading
+00:57:44  INFO      [Voice] Heard: what's your name
+00:57:44  INFO      [Router] NOVA → what's your name
+00:57:44  INFO      [Engine] GROQ | NOVA ← what's your name
+00:58:03  INFO      [Voice] Heard: dora
+00:58:11  INFO      [Voice] Heard: sora
+00:58:11  INFO      [Engine] Active assistant → SORA (history cleared)
+00:58:18  INFO      [Voice] Heard: what's your name
+00:58:18  INFO      [Router] SORA → what's your name
+00:58:18  INFO      [Engine] GROQ | SORA ← what's your name
+00:58:27  INFO      [Voice] Heard: on which topic we were talking about
+00:58:27  INFO      [Router] SORA → on which topic we were talking about
+00:58:27  INFO      [Engine] GROQ | SORA ← on which topic we were talking about
+00:58:47  INFO      [Voice] Heard: you are upgrading nice
+00:58:47  INFO      [Router] SORA → you are upgrading nice
+00:58:47  INFO      [Engine] GROQ | SORA ← you are upgrading nice
+00:59:05  INFO      [Voice] Heard: with whom you are working
+00:59:05  INFO      [Router] SORA → with whom you are working
+00:59:05  INFO      [Engine] GROQ | SORA ← with whom you are working
+00:59:14  INFO      [Voice] Heard: what ise your name
+00:59:14  INFO      [Router] SORA → what ise your name
+00:59:17  INFO      [Engine] GROQ | SORA ← Based on this search result, answer in 2-3 spoken sentences 
+00:59:17  INFO      [Engine] GROQ | SORA ← what ise your name
+00:59:46  INFO      [Voice] Heard: mukesh sora exit
+00:59:46  INFO      [Router] SORA → mukesh sora exit
+00:59:46  INFO      [Engine] GROQ | SORA ← Mukesh sora exit
+00:59:59  INFO      [Voice] Heard: no no
+00:59:59  INFO      [Router] SORA → no no
+00:59:59  INFO      [Engine] GROQ | SORA ← no no

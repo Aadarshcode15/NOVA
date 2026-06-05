@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 from core.voice import speak
+from core.logger import log
 
 TRIGGERS = (
     "wallpaper", "desktop", "organize desktop",
@@ -77,7 +78,7 @@ def handle_desktop(command: str) -> bool:
                     )
                     speak(f"Wallpaper changed to {found_path.name}.")
                 except Exception as e:
-                    print(f"[Wallpaper Error] {e}")
+                    log.error(f"[Wallpaper Error] {e}")
                     speak("Couldn't change the wallpaper.")
             else:
                 speak(f"Couldn't find an image called {fname} on your desktop or pictures folder.")
@@ -107,7 +108,7 @@ def handle_desktop(command: str) -> bool:
             if files[:5]:
                 speak(f"Files include: {', '.join(files[:5])}.")
         except Exception as e:
-            print(f"[Desktop List Error] {e}")
+            log.error(f"[Desktop List Error] {e}")
             speak("Couldn't read your desktop.")
         return True
 
@@ -141,7 +142,7 @@ def handle_desktop(command: str) -> bool:
                 f"on your desktop into folders by type."
             )
         except Exception as e:
-            print(f"[Organize Desktop Error] {e}")
+            log.error(f"[Organize Desktop Error] {e}")
             speak("Couldn't organise the desktop.")
         return True
 

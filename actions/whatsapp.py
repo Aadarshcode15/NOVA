@@ -4,6 +4,7 @@ import re
 import pywhatkit
 from core.voice import speak
 from config.settings import CONTACTS_FILE
+from core.logger import log
 
 
 def _load_contacts() -> dict:
@@ -11,16 +12,24 @@ def _load_contacts() -> dict:
         if CONTACTS_FILE.exists():
             return json.loads(CONTACTS_FILE.read_text(encoding="utf-8"))
     except Exception as e:
-        print(f"[WhatsApp] Contacts load error: {e}")
+        log.error(f"[WhatsApp] Contacts load error: {e}")
     return {}
 
 
 TRIGGERS = ("whatsapp", "message", "send", "text")
 
+# Commands that mention whatsapp but are app-launch requests, not messaging
+_OPEN_TRIGGERS = ("open whatsapp", "launch whatsapp", "start whatsapp",
+                   "close whatsapp", "whatsapp app")
+
 
 def handle_whatsapp(command: str) -> bool:
     c = command.lower()
     if not any(t in c for t in TRIGGERS):
+        return False
+
+    # Let system_control handle app-launch commands
+    if any(t in c for t in _OPEN_TRIGGERS):
         return False
 
     contacts = _load_contacts()
@@ -80,6 +89,6 @@ def handle_whatsapp(command: str) -> bool:
         )
         speak("Message sent.")
     except Exception as e:
-        print(f"[WhatsApp Send Error] {e}")
+        log.error(f"[WhatsApp Send Error] {e}")
         speak("Message may not have sent. Make sure WhatsApp Web is logged in on your browser.")
     return True

@@ -3,6 +3,7 @@ import webbrowser
 import requests
 from core.voice import speak
 from core.engine import query
+from core.logger import log
 
 TRIGGERS = (
     "search for", "search", "look up", "find", "browse",
@@ -53,7 +54,7 @@ def handle_search(command: str) -> bool:
             else:
                 speak(f"I couldn't find anything about {search_q}.")
         except Exception as e:
-            print(f"[Search Error] {e}")
+            log.error(f"[Search Error] {e}")
             speak("Sorry, I couldn't complete that search.")
 
     return False

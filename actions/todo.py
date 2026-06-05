@@ -2,6 +2,7 @@
 import json
 from core.voice import speak
 from config.settings import TODO_FILE
+from core.logger import log
 
 def _load() -> list:
     try:
@@ -15,7 +16,7 @@ def _save(todos: list) -> None:
     try:
         TODO_FILE.write_text(json.dumps(todos, indent=2), encoding="utf-8")
     except Exception as e:
-        print(f"[Todo] Save error: {e}")
+        log.error(f"[Todo] Save error: {e}")
 
 TRIGGERS = (
     "to do", "todo", "to-do", "my list", "note", "notes",

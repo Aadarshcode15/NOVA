@@ -10,6 +10,12 @@ def on_command(assistant: str, command: str) -> None:
     route(assistant, command)
 
 def main():
+    # ── Logger must be first — everything after this is recorded ──
+    from core.logger import log
+    log.info("=" * 55)
+    log.info("NOVA STARTING UP")
+    log.info("=" * 55)
+
     # ── One-time memory migration (safe to run on every startup) ──
     from memory.memory_manager import load_memory, save_memory, migrate_v1_to_v2
     save_memory(migrate_v1_to_v2(load_memory()))

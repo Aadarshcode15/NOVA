@@ -8,6 +8,7 @@ from config.settings import (
     OLLAMA_HOST, OLLAMA_MODEL,
 )
 from core.prompt import build_prompt
+from core.logger import log
 
 
 # ── Active State ───────────────────────────────────────────
@@ -21,14 +22,14 @@ def set_engine(engine: str) -> None:
     global _active_engine
     if engine in (Engine.GEMINI, Engine.GROQ, Engine.OLLAMA):
         _active_engine = engine
-        print(f"[Engine] Switched to {engine.upper()}")
+        log.info(f"[Engine] Switched to {engine.upper()}")
 
 def set_assistant(name: str) -> None:
     global _active_assistant
     if name.lower() in ("nova", "sora"):
         _active_assistant = name.lower()
         clear_history()   # fresh context when switching assistant
-        print(f"[Engine] Active assistant: {_active_assistant.upper()}")
+        log.info(f"[Engine] Active assistant → {_active_assistant.upper()} (history cleared)")
 
 def toggle_assistant() -> str:
     new = "sora" if _active_assistant == "nova" else "nova"
@@ -142,7 +143,7 @@ def query_vision(image_b64: str, prompt: str) -> str:
         )
         return response.text.strip()
     except Exception as e:
-        print(f"[Vision Error] {e}")
+        log.error(f"[Vision Error] {e}")
         return "Vision analysis failed."
 
 
@@ -181,7 +182,7 @@ def query(text: str, assistant: str = None, engine: str = None) -> str:
     # Step 1 — record user turn so history builders see it
     add_to_history("user", text)
 
-    print(f"[Engine] {eng.upper()} | {asst.upper()} ← {text[:60]}")
+    log.info(f"[Engine] {eng.upper()} | {asst.upper()} ← {text[:60]}")
 
     # Step 2 — try preferred engine, fall back on failure
     response = None
@@ -191,11 +192,11 @@ def query(text: str, assistant: str = None, engine: str = None) -> str:
             result = fn(text, asst)
             if result and result.strip():
                 if attempt != eng:
-                    print(f"[Engine] Fell back to {attempt.upper()}")
+                    log.warning(f"[Engine] Fell back to {attempt.upper()}")
                 response = result
                 break
         except Exception as e:
-            print(f"[Engine] {attempt.upper()} failed: {e}")
+            log.error(f"[Engine] {attempt.upper()} failed: {e}")
             continue
 
     if not response:

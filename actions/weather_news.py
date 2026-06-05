@@ -2,6 +2,7 @@
 import requests
 from core.voice import speak
 from config.settings import WEATHER_API_KEY, NEWS_API_KEY, MAX_NEWS
+from core.logger import log
 
 NEWS_CATEGORIES = {
     "technology":    "technology",
@@ -49,7 +50,7 @@ def handle_weather(command: str) -> bool:
             f"Feels like {feels} degrees, humidity at {hum} percent."
         )
     except Exception as e:
-        print(f"[Weather Error] {e}")
+        log.error(f"[Weather Error] {e}")
         speak("Sorry, I couldn't fetch the weather right now.")
     return True
 
@@ -73,7 +74,7 @@ def _fetch_news(category: str = "general") -> None:
         for i, a in enumerate(articles, 1):
             speak(f"Headline {i}. {a['title']}")
     except Exception as e:
-        print(f"[News Error] {e}")
+        log.error(f"[News Error] {e}")
         speak("Couldn't fetch the news.")
 
 def handle_news_command(command: str) -> bool:

@@ -1,6 +1,7 @@
 # core/command_router.py
 from core.voice  import speak, speak_nova, speak_sora
 from core.engine import query, set_engine, get_engine, Engine
+from core.logger import log
 
 # ── Lazy imports (only load when needed) ──────────────────
 def _sys():
@@ -98,7 +99,7 @@ def route(assistant: str, command: str) -> None:
     Falls back to AI query if no handler matches.
     """
     c = command.lower().strip()
-    print(f"[Router] {assistant.upper()} → {c}")
+    log.info(f"[Router] {assistant.upper()} → {c}")
 
     try:
         if _handle_exit(c):              return
@@ -132,6 +133,5 @@ def route(assistant: str, command: str) -> None:
 
     except Exception as e:
         import traceback
-        print(f"[Router Error] {e}")
-        traceback.print_exc()
+        log.error(f"[Router Error] {e}\n{traceback.format_exc()}")
         speak("Something went wrong. Please try again.")

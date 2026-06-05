@@ -1,0 +1,13 @@
+00:48:38  INFO      Session log: session_20260606_004838.log
+00:48:38  INFO      =======================================================
+00:48:38  INFO      NOVA STARTING UP
+00:48:38  INFO      =======================================================
+00:48:38  INFO      [Voice] Calibrating microphone...
+00:48:39  INFO      [TTS] Worker thread started.
+00:48:53  INFO      [Voice] Heard: open find explorer
+00:48:53  INFO      [Router] NOVA → open find explorer
+00:48:58  INFO      [System] Opened via Windows search: find explorer
+00:49:07  INFO      [Voice] Heard: sora
+00:49:07  INFO      [Engine] Active assistant → SORA (history cleared)
+00:49:15  INFO      [Voice] Heard: open spotify
+00:49:15  INFO      [Router] SORA → open spotify

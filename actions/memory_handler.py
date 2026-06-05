@@ -2,6 +2,7 @@
 from PIL.Image import item
 
 from core.voice import speak
+from core.logger import log
 from memory.memory_manager import (
     update_memory, forget_memory, clear_memory,
     get_memory_summary, load_memory, save_memory

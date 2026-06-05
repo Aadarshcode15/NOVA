@@ -14,6 +14,7 @@ from config.settings import (
 )
 from core.engine import get_assistant, set_assistant
 from core.lang_state import get_lang, set_lang, LANG_NAMES
+from core.logger import log
 
 # ── State ──────────────────────────────────────────────────
 class VoiceState:
@@ -95,7 +96,7 @@ def _init_kokoro() -> bool:
         print("[TTS] Kokoro ready.")
         return True
     except Exception as e:
-        print(f"[Kokoro Init Error] {e}")
+        log.error(f"[Kokoro Init Error] {e}")
         return False
 
 def _clean_for_tts(text: str) -> str:
@@ -129,7 +130,7 @@ def _speak_kokoro(text: str, voice_id: str) -> bool:
         os.remove(tmp)
         return True
     except Exception as e:
-        print(f"[Kokoro Error] {e}")
+        log.error(f"[Kokoro Error] {e}")
         return False
 
 # ── Edge TTS fallback ──────────────────────────────────────
@@ -151,7 +152,7 @@ def _speak_edge(text: str, voice: str) -> None:
         pygame.mixer.music.unload()
         os.remove(tmp)
     except Exception as e:
-        print(f"[Edge TTS Error] {e}")
+        log.error(f"[Edge TTS Error] {e}")
 
 # ── Main speak ─────────────────────────────────────────────
 # ── TTS Queue — non-blocking speak() ───────────────────────
@@ -183,7 +184,7 @@ def _tts_worker() -> None:
             if not _speak_kokoro(text, kokoro_v):
                 _speak_edge(text, edge_v)
         except Exception as e:
-            print(f"[TTS Worker Error] {e}")
+            log.error(f"[TTS Worker Error] {e}")
         finally:
             set_state(VoiceState.IDLE)
             _tts_queue.task_done()   # signals queue.join() that item is done
@@ -196,7 +197,7 @@ def _start_tts_worker() -> None:
         return
     _tts_thread = threading.Thread(target=_tts_worker, daemon=True, name="TTS-Worker")
     _tts_thread.start()
-    print("[TTS] Worker thread started.")
+    log.info("[TTS] Worker thread started.")
 
 
 def speak(text: str, assistant: str = None) -> None:
@@ -262,7 +263,7 @@ def audio_loop() -> None:
     recognizer.dynamic_energy_threshold = True
     recognizer.pause_threshold          = 0.8
 
-    print("[Voice] Calibrating microphone...")
+    log.info("[Voice] Calibrating microphone...")
     calibrate_mic()
     _start_tts_worker()                                          # start TTS thread first
     threading.Thread(target=_init_kokoro, daemon=True).start()  # pre-load Kokoro model
@@ -299,7 +300,7 @@ def audio_loop() -> None:
 
             command = _correct_mishears(command.strip())
             cl      = command.lower()
-            print(f"[Voice] Heard: {cl}")
+            log.info(f"[Voice] Heard: {cl}")
 
             # Single word noise filter
             words = cl.split()
@@ -330,7 +331,7 @@ def audio_loop() -> None:
                 set_assistant("nova")
                 command = cl.replace("hey nova","").replace("nova","").strip()
                 if not command:
-                    speak_nova("Yes?")
+                    speak_nova("Yes Boss?")
                     flush_mic(0.8)
                     set_state(VoiceState.LISTENING); continue
 
@@ -338,7 +339,7 @@ def audio_loop() -> None:
                 set_assistant("sora")
                 command = cl.replace("hey sora","").replace("sora","").strip()
                 if not command:
-                    speak_sora("Yes?")
+                    speak_sora("Yes Boss?")
                     flush_mic(0.8)
                     set_state(VoiceState.LISTENING); continue
 
@@ -353,7 +354,7 @@ def audio_loop() -> None:
             flush_mic(0.5)
 
         except Exception as e:
-            print(f"[Audio Loop Error] {e}")
+            log.error(f"[Audio Loop Error] {e}")
             time.sleep(0.3)
 
 def stop_audio_loop() -> None:

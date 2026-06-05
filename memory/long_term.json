@@ -1,28 +1,31 @@
 {
   "identity": {
-    "name_raj_f244": {
-      "value": "my name is raj",
-      "updated": "2026-06-03"
+    "name_adar_23ef": {
+      "value": "my name is Aadarsh",
+      "updated": "2026-06-06"
     }
   },
   "preferences": {
-    "coding_f928": {
+    "coding_be3f": {
       "value": "i like coding",
-      "updated": "2026-06-03"
+      "updated": "2026-06-06"
     }
   },
   "projects": {},
-  "relationships": {
-    "friend_aditi_18d3": {
-      "value": "my friend aditi",
-      "updated": "2026-06-05"
-    }
-  },
+  "relationships": {},
   "wishes": {},
   "notes": {
-    "mumbai_ec7b": {
+    "learning_141c": {
+      "value": "i am learning ai",
+      "updated": "2026-06-06"
+    },
+    "note_f417": {
+      "value": "i live in",
+      "updated": "2026-06-06"
+    },
+    "mumbai_ce5f": {
       "value": "i live in mumbai",
-      "updated": "2026-06-03"
+      "updated": "2026-06-06"
     }
   }
 }

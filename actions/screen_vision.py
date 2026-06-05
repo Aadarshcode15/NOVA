@@ -5,6 +5,7 @@ import tempfile
 import pyautogui
 from core.voice import speak
 from core.engine import query_vision
+from core.logger import log
 
 TRIGGERS = (
     "what's on my screen", "describe my screen", "what do you see",
@@ -37,6 +38,6 @@ def handle_vision(command: str) -> bool:
         description = query_vision(img_b64, prompt)
         speak(description)
     except Exception as e:
-        print(f"[Vision Error] {e}")
+        log.error(f"[Vision Error] {e}")
         speak("Sorry, I couldn't analyse the screen right now.")
     return True
