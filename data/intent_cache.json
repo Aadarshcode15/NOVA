@@ -1,0 +1,100 @@
+{
+  "play something chill": {
+    "category": "spotify",
+    "confidence": 0.95,
+    "action": "play",
+    "target": "music",
+    "entities": {
+      "mood": "chill"
+    },
+    "context_dependent": false
+  },
+  "play something cheat": {
+    "category": "spotify",
+    "confidence": 0.95,
+    "action": "play",
+    "target": "music",
+    "entities": {
+      "mood": "cheat"
+    },
+    "context_dependent": false
+  },
+  "something more": {
+    "category": "spotify",
+    "confidence": 0.9,
+    "action": "play",
+    "target": "music",
+    "entities": {
+      "mood": "upbeat"
+    },
+    "context_dependent": true
+  },
+  "something more upbeat": {
+    "category": "spotify",
+    "confidence": 0.9,
+    "action": "play",
+    "target": "music",
+    "entities": {
+      "mood": "upbeat"
+    },
+    "context_dependent": true
+  },
+  "play something romantic": {
+    "category": "spotify",
+    "confidence": 0.95,
+    "action": "play",
+    "target": "music",
+    "entities": {
+      "mood": "romantic"
+    },
+    "context_dependent": false
+  },
+  "play something rock": {
+    "category": "spotify",
+    "confidence": 0.95,
+    "action": "play",
+    "target": "music",
+    "entities": {
+      "mood": "rock"
+    },
+    "context_dependent": false
+  },
+  "play rock music": {
+    "category": "spotify",
+    "confidence": 0.95,
+    "action": "play",
+    "target": "rock music",
+    "entities": {
+      "mood": "rock"
+    },
+    "context_dependent": false
+  },
+  "play romantic music": {
+    "category": "spotify",
+    "confidence": 0.95,
+    "action": "play",
+    "target": "music",
+    "entities": {
+      "mood": "romantic"
+    },
+    "context_dependent": false
+  },
+  "something like hip hop": {
+    "category": "spotify",
+    "confidence": 0.95,
+    "action": "play",
+    "target": "music",
+    "entities": {
+      "mood": "hip hop"
+    },
+    "context_dependent": false
+  },
+  "what about nagpur": {
+    "category": "weather",
+    "confidence": 0.95,
+    "action": "check",
+    "target": "weather",
+    "entities": {},
+    "context_dependent": true
+  }
+}

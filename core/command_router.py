@@ -95,42 +95,80 @@ def _handle_time_date(command: str) -> bool:
 # ── Main Router ───────────────────────────────────────────
 def route(assistant: str, command: str) -> None:
     """
-    Routes a command to the correct action handler.
-    Falls back to AI query if no handler matches.
+    Intent-first routing:
+      1. Classify command → category + confidence
+      2. High confidence  → try target handler directly
+      3. Handler returned False OR low confidence → full linear check
+      4. Nothing matched  → AI fallback
     """
+    from core.intent import classify
+    from core.logger import log
+
     c = command.lower().strip()
     log.info(f"[Router] {assistant.upper()} → {c}")
 
     try:
-        if _handle_exit(c):              return
-        if _handle_engine_switch(c):     return
-        if _handle_time_date(c):         return
+        # ── Fast exits — no intent needed ──
+        if _handle_exit(c):          return
+        if _handle_engine_switch(c): return
+        if _handle_time_date(c):     return
 
-        # ── Handlers that need ORIGINAL casing (proper nouns, names, paths) ──
-        if _memory()(command):           return   # "Remember my friend Priya"
-        if _whatsapp()(command):         return   # contact name lookup
-        if _reminder()(command):         return   # time expressions
-        if _code()(command):             return   # file names on desktop
-        if _files()(command):            return   # file/folder names
+        # ── Classify intent ──
+        intent     = classify(command)
+        category   = intent.get("category", "general")
+        confidence = intent.get("confidence", 0.5)
+        log.info(f"[Intent] {category} ({confidence:.0%})")
 
-        # ── Handlers fine with lowercase ──
-        if _sys()(c):                    return
-        if _spotify()(c):                return
-        if _todo()(c):                   return
+        # ── High-confidence: jump directly to target handler ──
+        if confidence >= 0.80:
+            handle_weather, handle_news = _weather_news()
+
+            _intent_map = {
+                "spotify":  lambda: _spotify()(c),
+                "weather":  lambda: handle_weather(c),
+                "news":     lambda: handle_news(c),
+                "reminder": lambda: _reminder()(command),
+                "todo":     lambda: _todo()(c),
+                "whatsapp": lambda: _whatsapp()(command),
+                "system":   lambda: _sys()(c),
+                "youtube":  lambda: _youtube()(c),
+                "files":    lambda: _files()(command),
+                "code":     lambda: _code()(command),
+                "desktop":  lambda: _desktop()(c),
+                "search":   lambda: _search()(c),
+                "memory":   lambda: _memory()(command),
+                "vision":   lambda: _vision()(c),
+            }
+
+            handler = _intent_map.get(category)
+            if handler and handler():
+                return   # ← handled cleanly via intent
+
+        # ── Linear fallback — catches low confidence + missed intents ──
+        # Proper-noun handlers receive original command
+        if _memory()(command):       return
+        if _sys()(c):                return
+        if _spotify()(c):            return
+        if _whatsapp()(command):     return
+        if _reminder()(command):     return
+        if _todo()(c):               return
 
         handle_weather, handle_news = _weather_news()
-        if handle_weather(c):            return
-        if handle_news(c):               return
+        if handle_weather(c):        return
+        if handle_news(c):           return
+        if _vision()(c):             return
+        if _youtube()(c):            return
+        if _files()(command):        return
+        if _code()(command):         return
+        if _desktop()(c):            return
+        if _search()(c):             return
 
-        if _vision()(c):                 return
-        if _youtube()(c):                return
-        if _desktop()(c):                return
-        if _search()(c):                 return
-
-        # ── AI Fallback — always use original command ──
+        # ── AI fallback ──
         response = query(command, assistant)
         speak(response, assistant)
 
+    except SystemExit:
+        raise
     except Exception as e:
         import traceback
         log.error(f"[Router Error] {e}\n{traceback.format_exc()}")
