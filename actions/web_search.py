@@ -44,11 +44,13 @@ def handle_search(command: str) -> bool:
             results = list(DDGS().text(search_q, max_results=3))
             if results:
                 context = "\n".join([r.get("body", "") for r in results])
+                # REPLACE:
                 answer  = query(
                     f"Based on this search result, answer in 2-3 spoken sentences "
                     f"(no markdown, no bullet points):\n"
                     f"Question: {search_q}\n"
-                    f"Search results: {context[:2000]}"
+                    f"Search results: {context[:2000]}",
+                    skip_history=True      # internal call — don't pollute conversation
                 )
                 speak(answer)
             else:

@@ -96,5 +96,165 @@
     "target": "weather",
     "entities": {},
     "context_dependent": true
+  },
+  "hello, everyone. i'm going to be talking about the most important thing in the world, which is the most important thing in the world. i'm going to be talking about the most important thing in the world, which is the most important thing in the world. i'm going to be talking about the most important thing in the world, which is the most important thing in the world. i'm going to be talking about the most important thing in the world, which is the most important thing in the world.": {
+    "category": "general",
+    "confidence": 0.0,
+    "action": "talk",
+    "target": "about the most important thing in the world",
+    "entities": {},
+    "context_dependent": false
+  },
+  "horses doing that.": {
+    "category": "general",
+    "confidence": 0.8,
+    "action": "describe",
+    "target": "horses",
+    "entities": {
+      "mood": "that"
+    },
+    "context_dependent": true
+  },
+  "search egg partner on youtube": {
+    "category": "youtube",
+    "confidence": 0.95,
+    "action": "search",
+    "target": "Egg Partner",
+    "entities": {},
+    "context_dependent": false
+  },
+  "अग परनर अन यो तुब": {
+    "category": "youtube",
+    "confidence": 0.95,
+    "action": "play",
+    "target": "video",
+    "entities": {
+      "contact": "अग परनर अन"
+    },
+    "context_dependent": false
+  },
+  "what's going on?": {
+    "category": "news",
+    "confidence": 0.8,
+    "action": "search",
+    "target": "headlines",
+    "entities": {},
+    "context_dependent": false
+  },
+  "here i was on youtube": {
+    "category": "youtube",
+    "confidence": 0.95,
+    "action": "play",
+    "target": "videos",
+    "entities": {},
+    "context_dependent": false
+  },
+  "gehra hua on youtube": {
+    "category": "youtube",
+    "confidence": 1.0,
+    "action": "play",
+    "target": "video",
+    "entities": {
+      "title": "Gehra Hua"
+    },
+    "context_dependent": false
+  },
+  "main ghera hua on spotify": {
+    "category": "spotify",
+    "confidence": 0.95,
+    "action": "play",
+    "target": "main ghera Hua",
+    "entities": {
+      "mood": "Hua"
+    },
+    "context_dependent": false
+  },
+  "ekno gamer is on your team.": {
+    "category": "whatsapp",
+    "confidence": 0.95,
+    "action": "send",
+    "target": "message",
+    "entities": {
+      "contact": "Ekno Gamer"
+    },
+    "context_dependent": false
+  },
+  "technogamer on youtube": {
+    "category": "youtube",
+    "confidence": 0.95,
+    "action": "search",
+    "target": "Technogamer",
+    "entities": {
+      "contact": "Technogamer"
+    },
+    "context_dependent": false
+  },
+  "i think find out who he is.": {
+    "category": "search",
+    "confidence": 0.95,
+    "action": "find",
+    "target": "person",
+    "entities": {
+      "contact": "he"
+    },
+    "context_dependent": false
+  },
+  "play sitari on spotify.": {
+    "category": "spotify",
+    "confidence": 1.0,
+    "action": "play",
+    "target": "Sitari",
+    "entities": {
+      "contact": ""
+    },
+    "context_dependent": false
+  },
+  "stop": {
+    "category": "spotify",
+    "confidence": 1.0,
+    "action": "stop",
+    "target": "music",
+    "entities": {},
+    "context_dependent": false
+  },
+  "play sitare on spotify": {
+    "category": "spotify",
+    "confidence": 0.95,
+    "action": "play",
+    "target": "Sitare",
+    "entities": {
+      "contact": "empty string",
+      "mood": "empty string",
+      "value": "empty string"
+    },
+    "context_dependent": false
+  },
+  "expand in detail recursion encoding.": {
+    "category": "code",
+    "confidence": 1.0,
+    "action": "explain",
+    "target": "recursion encoding",
+    "entities": {
+      "value": ""
+    },
+    "context_dependent": false
+  },
+  "who is harthik pandya?": {
+    "category": "search",
+    "confidence": 0.95,
+    "action": "search",
+    "target": "Harthik Pandya",
+    "entities": {},
+    "context_dependent": false
+  },
+  "write a code to add two numbers in python.": {
+    "category": "code",
+    "confidence": 1.0,
+    "action": "write",
+    "target": "code",
+    "entities": {
+      "language": "Python"
+    },
+    "context_dependent": false
   }
 }

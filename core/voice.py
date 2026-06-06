@@ -7,6 +7,7 @@ import threading
 import speech_recognition as sr
 import pygame
 import soundfile as sf
+from core.logger import log
 
 from config.settings import (
     NOVA_NAME, SORA_NAME,
@@ -14,7 +15,7 @@ from config.settings import (
 )
 from core.engine import get_assistant, set_assistant
 from core.lang_state import get_lang, set_lang, LANG_NAMES
-from core.logger import log
+from core import stt_engine
 
 # ── State ──────────────────────────────────────────────────
 class VoiceState:
@@ -86,14 +87,17 @@ _kokoro_lock  = threading.Lock()
 
 def _init_kokoro() -> bool:
     global _kokoro_model
+    if _kokoro_model is not None:    # already loaded by another thread
+        return True
     try:
         from kokoro_onnx import Kokoro
+        from core.logger import log
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         onnx = os.path.join(base, "kokoro-v1.0.onnx")
         bins = os.path.join(base, "voices-v1.0.bin")
-        print("[TTS] Loading Kokoro...")
+        log.info("[TTS] Loading Kokoro...")
         _kokoro_model = Kokoro(onnx, bins)
-        print("[TTS] Kokoro ready.")
+        log.info("[TTS] Kokoro ready.")
         return True
     except Exception as e:
         log.error(f"[Kokoro Init Error] {e}")
@@ -265,8 +269,8 @@ def audio_loop() -> None:
 
     log.info("[Voice] Calibrating microphone...")
     calibrate_mic()
-    _start_tts_worker()                                          # start TTS thread first
-    threading.Thread(target=_init_kokoro, daemon=True).start()  # pre-load Kokoro model
+    _start_tts_worker()           # TTS worker loads Kokoro on first speak — no race
+    stt_engine.preload()          # Whisper loads in background    # start loading Whisper in background  # pre-load Kokoro model
 
     try:
         speak_nova("Neural Operative Voice Assistant online. I am ready for your Command.")
@@ -275,7 +279,23 @@ def audio_loop() -> None:
     except Exception as e:
         print(f"[Startup Error] {e}")
 
+    _was_speaking = False   # tracks speaking → idle transition for mic flush
+
     while _audio_loop_running:
+
+        # ── Don't listen while NOVA is speaking ───────────
+        # Prevents mic picking up NOVA's own voice (speaker bleed)
+        if not _tts_queue.empty() or _state == VoiceState.SPEAKING:
+            _was_speaking = True
+            time.sleep(0.08)
+            continue
+
+        # ── Flush mic after speaking finishes ─────────────
+        # Clears any residual speaker audio before listening
+        if _was_speaking:
+            flush_mic(0.4)
+            _was_speaking = False
+
         set_state(VoiceState.LISTENING)
         try:
             with sr.Microphone() as source:
@@ -287,13 +307,19 @@ def audio_loop() -> None:
 
             set_state(VoiceState.THINKING)
 
-            try:
-                command = recognizer.recognize_google(audio)
-            except sr.UnknownValueError:
-                set_state(VoiceState.LISTENING); continue
-            except sr.RequestError as e:
-                print(f"[STT Error] {e}")
-                set_state(VoiceState.LISTENING); continue
+            # ── STT: Whisper local → Google fallback ──────────
+            command = stt_engine.transcribe(audio)
+
+            if not command:
+                # Whisper returned nothing — try Google STT as fallback
+                try:
+                    command = recognizer.recognize_google(audio)
+                    log.debug("[STT] Google STT fallback used")
+                except sr.UnknownValueError:
+                    set_state(VoiceState.LISTENING); continue
+                except sr.RequestError as e:
+                    log.warning(f"[STT] Google STT also unavailable: {e}")
+                    set_state(VoiceState.LISTENING); continue
 
             if not command or len(command.strip()) < 3:
                 set_state(VoiceState.LISTENING); continue

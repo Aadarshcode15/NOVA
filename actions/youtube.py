@@ -55,7 +55,8 @@ def handle_youtube(command: str) -> bool:
 
             summary = query(
                 f"Summarize this YouTube video transcript in 3-4 spoken sentences. "
-                f"No markdown or bullet points:\n\n{full_text}"
+                f"No markdown or bullet points:\n\n{full_text}",
+                skip_history=True
             )
             speak(summary)
         except Exception as e:

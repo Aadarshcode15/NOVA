@@ -19,10 +19,11 @@ def get_engine()    -> str: return _active_engine
 def get_assistant() -> str: return _active_assistant
 
 def set_engine(engine: str) -> None:
-    global _active_engine
+    global _active_engine, _manual_override
     if engine in (Engine.GEMINI, Engine.GROQ, Engine.OLLAMA):
-        _active_engine = engine
-        log.info(f"[Engine] Switched to {engine.upper()}")
+        _active_engine    = engine
+        _manual_override  = True    # user explicitly chose — pause smart routing
+        log.info(f"[Engine] Switched to {engine.upper()} (manual — smart routing paused)")
 
 def set_assistant(name: str) -> None:
     global _active_assistant
@@ -43,6 +44,28 @@ def toggle_assistant() -> str:
 
 _history_lock = threading.Lock()
 _conversation_history: deque = deque(maxlen=20)
+
+# ── Engine usage stats (current session) ──────────────────
+# Tracks how many calls go to each engine.
+# Lets you verify smart routing is saving Gemini calls.
+_engine_stats: dict = {Engine.GEMINI: 0, Engine.GROQ: 0, Engine.OLLAMA: 0}
+_manual_override: bool = False   # True when user explicitly switches engine
+
+
+def get_engine_stats() -> dict:
+    return dict(_engine_stats)
+
+
+def log_engine_stats() -> None:
+    total = sum(_engine_stats.values())
+    if total == 0:
+        return
+    log.info(
+        f"[Engine Stats] {total} total calls — "
+        f"Gemini: {_engine_stats[Engine.GEMINI]} | "
+        f"Groq: {_engine_stats[Engine.GROQ]} | "
+        f"Ollama: {_engine_stats[Engine.OLLAMA]}"
+    )
 
 def add_to_history(role: str, content: str) -> None:
     """role must be 'user' or 'assistant'."""
@@ -90,6 +113,80 @@ def _build_gemini_prompt(text: str, assistant: str) -> str:
     ])
     return f"{build_prompt(assistant)}\n\n{history_text}\nUser: {text}"
 
+# ── Smart Engine Router ────────────────────────────────────
+
+def _smart_select_engine(text: str, preferred: str) -> str:
+    """
+    Select the optimal engine for this query.
+
+    Rules (in priority order):
+      1. Explicit offline/local request     → Ollama
+      2. Code / analysis / creation tasks  → Gemini  (needs depth)
+      3. Long queries (> 15 words)          → Gemini  (complexity signal)
+      4. Greetings / short chitchat         → Groq    (fast, saves Gemini quota)
+      5. Short queries (≤ 8 words)          → Groq    (fast enough)
+      6. Everything else                    → user preferred engine
+
+    If user manually switched engine (set_engine() called), returns preferred
+    immediately — manual choice always wins.
+    """
+    import re
+
+    # Manual override — respect user's explicit choice
+    if _manual_override:
+        return preferred
+
+    t = text.lower().strip()
+
+    # ── 1. Explicit offline/private → Ollama ──────────────
+    OFFLINE_SIGNALS = ("offline", "local mode", "use local", "go private",
+                       "no internet", "use ollama")
+    if any(k in t for k in OFFLINE_SIGNALS):
+        return Engine.OLLAMA
+
+    # ── 2. Complex tasks → Gemini ─────────────────────────
+    GEMINI_PATTERNS = [
+        r"\b(write|create|generate|draft|compose|build)\b",
+        r"\b(explain|analyze|analyse|compare|evaluate|summarize|summarise)\b",
+        r"\b(code|script|program|function|algorithm|debug|fix the)\b",
+        r"\b(essay|letter|email|report|document|story|poem)\b",
+        r"\b(why|how does|what causes|difference between|pros and cons)\b",
+        r"\b(translate|convert|transform|refactor)\b",
+        r"\b(step by step|in detail|thoroughly|in depth|walk me through)\b",
+        r"\b(research|investigate|deep dive|breakdown)\b",
+    ]
+    for pattern in GEMINI_PATTERNS:
+        if re.search(pattern, t):
+            log.debug(f"[SmartRoute] Complex task detected → GEMINI")
+            return Engine.GEMINI
+
+    # ── 3. Long queries → Gemini ──────────────────────────
+    if len(text.split()) > 15:
+        log.debug(f"[SmartRoute] Long query ({len(text.split())} words) → GEMINI")
+        return Engine.GEMINI
+
+    # ── 4. Simple chitchat → Groq ─────────────────────────
+    GROQ_PATTERNS = [
+        r"^(hi|hello|hey|good\s+(morning|evening|night|afternoon))\b",
+        r"^(how are you|what'?s up|how'?s it going|you good)\b",
+        r"^(thanks|thank you|cheers|ok|okay|sure|got it|cool|great|awesome|nice)\b",
+        r"^(tell me a joke|say something|make me laugh|be funny)\b",
+        r"^(who are you|what are you|what can you do|introduce yourself)\b",
+        r"^(yes|no|maybe|definitely|absolutely|of course|certainly)\b",
+        r"^(good job|well done|nice work|perfect|excellent)\b",
+    ]
+    for pattern in GROQ_PATTERNS:
+        if re.search(pattern, t):
+            log.debug(f"[SmartRoute] Chitchat → GROQ")
+            return Engine.GROQ
+
+    # ── 5. Short queries → Groq ───────────────────────────
+    if len(text.split()) <= 8:
+        log.debug(f"[SmartRoute] Short query ({len(text.split())} words) → GROQ")
+        return Engine.GROQ
+
+    # ── 6. Default → user preferred ──────────────────────
+    return preferred
 
 # ── Engine Backends ────────────────────────────────────────
 
@@ -166,23 +263,26 @@ _ENGINE_FN = {
 
 # ── Main Query Entry Point ─────────────────────────────────
 
-def query(text: str, assistant: str = None, engine: str = None) -> str:
-    """
-    Send text to the AI with full conversation history.
-    Falls back through the engine chain silently on any error.
+def query(text: str, assistant: str = None, engine: str = None,
+          skip_history: bool = False) -> str:
+    asst      = (assistant or _active_assistant).lower()
+    preferred = (engine    or _active_engine).lower()
 
-    History flow:
-      1. User turn added to history   ← before calling engine
-      2. Engine builds prompt/messages from history
-      3. Response added to history    ← after engine returns
-    """
-    asst = (assistant or _active_assistant).lower()
-    eng  = (engine    or _active_engine).lower()
+    # ── Smart engine selection ─────────────────────────────
+    eng = _smart_select_engine(text, preferred)
 
-    # Step 1 — record user turn so history builders see it
-    add_to_history("user", text)
+    # Step 1 — record user turn (skip for internal action handler calls)
+    if not skip_history:
+        add_to_history("user", text)
 
-    log.info(f"[Engine] {eng.upper()} | {asst.upper()} ← {text[:60]}")
+    # Track usage stats
+    if eng in _engine_stats:
+        _engine_stats[eng] += 1
+
+    if eng != preferred:
+        log.info(f"[Engine] {preferred.upper()} → {eng.upper()} (smart route) | {text[:50]}")
+    else:
+        log.info(f"[Engine] {eng.upper()} | {asst.upper()} ← {text[:60]}")
 
     # Step 2 — try preferred engine, fall back on failure
     response = None
@@ -202,7 +302,8 @@ def query(text: str, assistant: str = None, engine: str = None) -> str:
     if not response:
         response = "I am having trouble connecting right now. Please try again."
 
-    # Step 3 — record assistant response
-    add_to_history("assistant", response)
+# Step 3 — record assistant response (skip for internal calls)
+    if not skip_history:
+        add_to_history("assistant", response)
 
     return response

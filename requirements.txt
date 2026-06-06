@@ -9,7 +9,8 @@ sounddevice
 edge-tts
 pygame
 kokoro-onnx                  # ADDED: TTS model (was missing)
-soundfile                    # ADDED: audio I/O in voice.py (was missing)
+soundfile  
+faster-whisper             # ADDED: audio I/O in voice.py (was missing)
 
 # ── UI ──────────────────────────────────────────────────────
 PyQt6

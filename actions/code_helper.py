@@ -41,7 +41,8 @@ def handle_code(command: str) -> bool:
         try:
             code = query(
                 f"Write clean, well-commented Python code to: {task}\n"
-                f"Return ONLY the code. No explanations, no markdown backticks."
+                f"Return ONLY the code. No explanations, no markdown backticks.",
+                skip_history=True
             )
             # Detect language and set extension
             ext      = ".py"
@@ -138,7 +139,8 @@ def handle_code(command: str) -> bool:
         try:
             explanation = query(
                 f"Explain this code in 3-4 simple spoken sentences. "
-                f"No markdown, no bullet points:\n\n{content[:2000]}"
+                f"No markdown, no bullet points:\n\n{content[:2000]}",
+                skip_history=True
             )
             speak(explanation)
         except Exception as e:
@@ -160,7 +162,8 @@ def handle_code(command: str) -> bool:
         try:
             fixed = query(
                 f"Fix any bugs in this Python code. "
-                f"Return ONLY the corrected code. No markdown, no explanations:\n\n{content}"
+                f"Return ONLY the corrected code. No markdown, no explanations:\n\n{content}",
+                skip_history=True
             )
             fpath.write_text(fixed, encoding="utf-8")
             speak(f"Done. I've fixed the code and saved it back to {fpath.name}.")
