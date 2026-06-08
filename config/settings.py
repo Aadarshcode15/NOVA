@@ -49,9 +49,10 @@ class Engine:
 
 GEMINI_MODEL  = "gemini-2.5-flash"
 GROQ_MODEL    = "llama-3.1-8b-instant"
+GROQ_VISION_MODEL  = "meta-llama/llama-4-scout-17b-16e-instruct"  # free, fast vision
 OLLAMA_MODEL  = "gemma4:e4b"
 OLLAMA_HOST   = "http://localhost:11434"
-VISION_MODEL  = "gemini-2.5-flash"
+VISION_MODEL  = "gemini-2.5-flash"   # fallback for vision tasks if GROQ model fails
 
 DEFAULT_ENGINE = Engine.GROQ
 

@@ -256,5 +256,138 @@
       "language": "Python"
     },
     "context_dependent": false
+  },
+  "write a code for addition of two numbers in python.": {
+    "category": "code",
+    "confidence": 1.0,
+    "action": "write",
+    "target": "code",
+    "entities": {
+      "language": "Python",
+      "value": "two numbers"
+    },
+    "context_dependent": false
+  },
+  "create an html page with the contact form.": {
+    "category": "files",
+    "confidence": 0.95,
+    "action": "create",
+    "target": "HTML page",
+    "entities": {
+      "contact": "form"
+    },
+    "context_dependent": false
+  },
+  "create an html page with logging form.": {
+    "category": "code",
+    "confidence": 1.0,
+    "action": "create",
+    "target": "HTML page",
+    "entities": {
+      "value": "logging form"
+    },
+    "context_dependent": false
+  },
+  "create a portfolio website using html, css and javascript.": {
+    "category": "code",
+    "confidence": 1.0,
+    "action": "create",
+    "target": "portfolio website",
+    "entities": {
+      "technology": "HTML, CSS, JavaScript"
+    },
+    "context_dependent": false
+  },
+  "that's me.": {
+    "category": "memory",
+    "confidence": 0.95,
+    "action": "remember",
+    "target": "user",
+    "entities": {
+      "contact": "user"
+    },
+    "context_dependent": false
+  },
+  "create portfolio website using html, css and javascript.": {
+    "category": "code",
+    "confidence": 1.0,
+    "action": "create",
+    "target": "portfolio website",
+    "entities": {
+      "language": "HTML, CSS, JavaScript"
+    },
+    "context_dependent": false
+  },
+  "write, write code for addition of two numbers.": {
+    "category": "code",
+    "confidence": 1.0,
+    "action": "write",
+    "target": "code",
+    "entities": {
+      "value": "addition of two numbers"
+    },
+    "context_dependent": false
+  },
+  "create login form using html, css and our script.": {
+    "category": "code",
+    "confidence": 0.95,
+    "action": "create",
+    "target": "login form",
+    "entities": {
+      "value": "HTML, CSS, script"
+    },
+    "context_dependent": false
+  },
+  "shut up, shut up, shut up, shut up.": {
+    "category": "general",
+    "confidence": 0.0,
+    "action": "shut",
+    "target": "up",
+    "entities": {},
+    "context_dependent": false
+  },
+  "i didn't stop, i didn't stop.": {
+    "category": "general",
+    "confidence": 0.8,
+    "action": "repeat",
+    "target": "previous statement",
+    "entities": {},
+    "context_dependent": true
+  },
+  "create code for your website using html, css, and javascript.": {
+    "category": "code",
+    "confidence": 1.0,
+    "action": "create",
+    "target": "code",
+    "entities": {
+      "language": "HTML, CSS, JavaScript"
+    },
+    "context_dependent": false
+  },
+  "create code for your website using html, css and javascript.": {
+    "category": "code",
+    "confidence": 1.0,
+    "action": "create",
+    "target": "code",
+    "entities": {
+      "value": "HTML, CSS, JavaScript"
+    },
+    "context_dependent": false
+  },
+  "write a program to explain multiple inheritance in java.": {
+    "category": "code",
+    "confidence": 1.0,
+    "action": "explain",
+    "target": "multiple inheritance in Java",
+    "entities": {},
+    "context_dependent": false
+  },
+  "choda chodi": {
+    "category": "general",
+    "confidence": 0.0,
+    "action": "general",
+    "target": "choda chodi",
+    "entities": {},
+    "context_dependent": false
   }
 }

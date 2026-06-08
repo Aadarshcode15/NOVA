@@ -204,16 +204,34 @@ def _start_tts_worker() -> None:
     log.info("[TTS] Worker thread started.")
 
 
+# Max characters to send to TTS — prevents Kokoro phoneme overflow
+# (~400 chars ≈ 60 spoken words, plenty for any normal response)
+_MAX_TTS_CHARS = 400
+
 def speak(text: str, assistant: str = None) -> None:
     """
     Non-blocking. Enqueues text and returns immediately.
-    Audio plays from the dedicated TTS worker thread.
-    UI transcript fires instantly without waiting for audio.
+    Truncates at word boundary if text is suspiciously long
+    (code, data dumps, etc.) to prevent Kokoro from crashing.
     """
     if not text or not text.strip():
         return
+
+    # Detect and skip code-like responses silently
+    # (code should be saved to file, not spoken)
+    stripped = text.strip()
+    if len(stripped) > _MAX_TTS_CHARS:
+        # Find last complete word within the limit
+        truncated = stripped[:_MAX_TTS_CHARS].rsplit(" ", 1)[0]
+        from core.logger import log
+        log.warning(
+            f"[TTS] Response too long ({len(stripped)} chars), "
+            f"truncated to {len(truncated)} chars"
+        )
+        text = truncated + "."
+
     asst = (assistant or get_assistant()).lower()
-    _fire("response", {"who": asst, "text": text})   # UI updates instantly
+    _fire("response", {"who": asst, "text": text})
     _tts_queue.put((text, asst))
 
 

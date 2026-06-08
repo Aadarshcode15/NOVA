@@ -158,8 +158,8 @@ def route(assistant: str, command: str) -> None:
         if handle_news(c):           return
         if _vision()(c):             return
         if _youtube()(c):            return
+        if _code()(command):         return   # before files — "create X" is code, not file op
         if _files()(command):        return
-        if _code()(command):         return
         if _desktop()(c):            return
         if _search()(c):             return
 

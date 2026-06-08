@@ -4,7 +4,7 @@ import base64
 import tempfile
 import pyautogui
 from core.voice import speak
-from core.engine import query_vision
+from core.engine import query_vision_groq
 from core.logger import log
 
 TRIGGERS = (
@@ -35,7 +35,7 @@ def handle_vision(command: str) -> bool:
             "Be concise — this will be spoken aloud. "
             "No markdown, no bullet points."
         )
-        description = query_vision(img_b64, prompt)
+        description = query_vision_groq(img_b64, prompt)
         speak(description)
     except Exception as e:
         log.error(f"[Vision Error] {e}")

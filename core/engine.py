@@ -242,7 +242,49 @@ def query_vision(image_b64: str, prompt: str) -> str:
     except Exception as e:
         log.error(f"[Vision Error] {e}")
         return "Vision analysis failed."
+    
+def query_vision_groq(image_b64: str, prompt: str) -> str:
+    """
+    Vision query using Groq's Llama 4 Scout.
+    Free tier, fast, no Gemini quota consumed.
+    Falls back to Gemini Vision on failure.
+    """
+    from config.settings import GROQ_VISION_MODEL
 
+    # ── Try Groq Vision first ──────────────────────────────
+    try:
+        from groq import Groq
+        client = Groq(api_key=GROQ_API_KEY)
+        resp   = client.chat.completions.create(
+            model      = GROQ_VISION_MODEL,
+            messages   = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{image_b64}"
+                            },
+                        },
+                        {
+                            "type": "text",
+                            "text": prompt,
+                        },
+                    ],
+                }
+            ],
+            max_tokens = 300,
+        )
+        result = resp.choices[0].message.content.strip()
+        if result:
+            log.info("[Vision] Groq vision used.")
+            return result
+    except Exception as e:
+        log.warning(f"[Vision] Groq vision failed, falling back to Gemini: {e}")
+
+    # ── Fallback to Gemini Vision ──────────────────────────
+    return query_vision(image_b64, prompt)
 
 # ── Fallback Chain ─────────────────────────────────────────
 # On any failure, tries the next engine automatically.
@@ -260,6 +302,83 @@ _ENGINE_FN = {
     Engine.OLLAMA: _query_ollama,
 }
 
+# ── Raw Query — for code gen, summarization, internal tasks ──
+# No conversation history, no persona, no memory bleed.
+# Use this whenever the AI must return structured output (code, JSON, etc.)
+
+_CODE_SYSTEM = (
+    "You are an expert software developer and code generator.\n"
+    "ABSOLUTE RULES — no exceptions:\n"
+    "1. Return ONLY raw source code. Nothing else.\n"
+    "2. NO markdown fences (no ``` or ```python or ```html)\n"
+    "3. NO explanations, greetings, commentary, or personal messages\n"
+    "4. NO references to the user or their interests\n"
+    "5. Start the code on line 1, character 1\n"
+    "6. Code must be complete, runnable, and well-commented\n"
+)
+
+def raw_query(prompt: str, system: str = _CODE_SYSTEM, engine: str = None,
+              fallback_order: list = None) -> str:
+    """
+    Direct AI call with custom system prompt.
+    Completely bypasses: conversation history, NOVA persona, user memory.
+    Used for: code generation, document processing, structured output.
+
+    fallback_order: custom engine chain e.g. ["gemini", "ollama"]
+                    overrides the default chain for this call only.
+    """
+    eng   = (engine or _active_engine).lower()
+    chain = fallback_order if fallback_order else _FALLBACK_CHAIN.get(eng, [eng])
+
+    for attempt in chain:
+        try:
+            if attempt == Engine.GROQ:
+                from groq import Groq
+                client = Groq(api_key=GROQ_API_KEY)
+                resp   = client.chat.completions.create(
+                    model       = GROQ_MODEL,
+                    messages    = [
+                        {"role": "system", "content": system},
+                        {"role": "user",   "content": prompt},
+                    ],
+                    temperature = 0.2,   # lower = more deterministic code
+                )
+                result = resp.choices[0].message.content.strip()
+
+            elif attempt == Engine.GEMINI:
+                from google import genai
+                client   = genai.Client(api_key=GEMINI_API_KEY)
+                response = client.models.generate_content(
+                    model    = GEMINI_MODEL,
+                    contents = f"{system}\n\n{prompt}",
+                )
+                result = response.text.strip()
+
+            elif attempt == Engine.OLLAMA:
+                from ollama import Client as OllamaClient
+                client = OllamaClient(host=OLLAMA_HOST)
+                resp   = client.chat(
+                    model    = OLLAMA_MODEL,
+                    messages = [
+                        {"role": "system", "content": system},
+                        {"role": "user",   "content": prompt},
+                    ],
+                )
+                result = resp["message"]["content"].strip()
+            else:
+                continue
+
+            if result:
+                if attempt != eng:
+                    log.warning(f"[Engine] raw_query fell back to {attempt.upper()}")
+                log.info(f"[Engine] raw_query via {attempt.upper()} ({len(result)} chars)")
+                return result
+
+        except Exception as e:
+            log.error(f"[Engine] raw_query {attempt.upper()} failed: {e}")
+            continue
+
+    return ""
 
 # ── Main Query Entry Point ─────────────────────────────────
 
