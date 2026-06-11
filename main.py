@@ -39,16 +39,21 @@ def on_command(assistant: str, command: str) -> None:
     """Called by voice loop when a command is recognized."""
     route(assistant, command)
 
+# REPLACE WITH:
 def main():
-    # ── Logger must be first — everything after this is recorded ──
+    # ── Logger must be first ──
     from core.logger import log
     log.info("=" * 55)
     log.info("NOVA STARTING UP")
     log.info("=" * 55)
 
-    # ── One-time memory migration (safe to run on every startup) ──
+    # ── One-time memory migration ──
     from memory.memory_manager import load_memory, save_memory, migrate_v1_to_v2
     save_memory(migrate_v1_to_v2(load_memory()))
+
+    # ── Start proactive briefing scheduler ──
+    from memory.proactive import start_briefing_scheduler
+    start_briefing_scheduler()
 
     # Register command callback
     set_command_callback(on_command)
@@ -60,15 +65,21 @@ def main():
     # Launch PyQt6 UI (runs on main thread)
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+    app.setQuitOnLastWindowClosed(False)   # keep alive when window is hidden
 
     from ui.main_window import NovaWindow
     window = NovaWindow()
+
+    # ── System tray ──
+    from ui.tray import NovaTray
+    tray = NovaTray(window)
+    window._tray = tray    # give window a reference for closeEvent
+
     window.show()
 
     exit_code = app.exec()
     stop_audio_loop()
 
-    # Print engine usage stats for this session
     from core.engine import log_engine_stats
     log_engine_stats()
 

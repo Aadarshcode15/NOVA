@@ -32,7 +32,16 @@ _NOVA_PROMPT = (
     f"write code, run code, explain code, fix code, "
     f"search for, what is, who is, how to, tell me about, "
     f"switch to Gemini, switch to Groq, switch to Ollama, "
-    f"remember that, what do you know about me."
+    f"remember that, what do you know about me, "
+    # Sprint 3 vocabulary — words Whisper struggled with
+    f"morning briefing, daily briefing, give me my briefing, "
+    f"run the briefing, start briefing, "
+    f"check my emails, read my emails, any new emails, unread emails, "
+    f"send email to, summarize that email, emails from, "
+    f"what's on my calendar, my calendar today, my schedule, "
+    f"add to my calendar, create an event, schedule a meeting, "
+    f"create a portfolio, create a website, build a calculator, "
+    f"write a program, write a script, list my codes."
 )
 
 _model      = None

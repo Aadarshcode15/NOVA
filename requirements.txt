@@ -1,7 +1,9 @@
 # ── AI Engines ──────────────────────────────────────────────
-google-genai                 # CHANGED: was google-generativeai (wrong package)
+google-genai                 
 groq
 ollama
+
+schedule       # task scheduling for morning briefing
 
 # ── Voice / Audio ───────────────────────────────────────────
 SpeechRecognition
@@ -51,3 +53,9 @@ numpy
 
 # ── Utils ───────────────────────────────────────────────────
 python-dotenv
+
+# ── Google APIs (Sprint 3) ───────────────────────────────────
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+dateparser

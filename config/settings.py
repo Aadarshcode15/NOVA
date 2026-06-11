@@ -65,7 +65,8 @@ MAX_RECORD_SECS   = 15        # max recording length
 
 # ── Features ───────────────────────────────────────────────
 MAX_NEWS          = 5
-FACE_CHECK_INTERVAL = 8       # kept for future use
+FACE_CHECK_INTERVAL = 8     # kept for future use
+MORNING_BRIEFING_TIME = os.getenv("MORNING_BRIEFING_TIME", "08:00")  # 24h format   
 
 # ── UI ─────────────────────────────────────────────────────
 UI_WIDTH          = 1400

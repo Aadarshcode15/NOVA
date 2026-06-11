@@ -56,6 +56,14 @@ def _search():
     from actions.web_search import handle_search
     return handle_search
 
+def _calendar():
+    from actions.calendar import handle_calendar
+    return handle_calendar
+
+def _email():
+    from actions.email import handle_email
+    return handle_email
+
 # ── Engine switch commands ─────────────────────────────────
 def _handle_engine_switch(command: str) -> bool:
     c = command.lower()
@@ -92,6 +100,19 @@ def _handle_time_date(command: str) -> bool:
         return True
     return False
 
+def _handle_briefing(command: str) -> bool:
+    triggers = (
+        "morning briefing", "daily briefing",
+        "give me my briefing", "start briefing",
+        "run the briefing", "my briefing",
+    )
+    if not any(t in command for t in triggers):
+        return False
+    import threading
+    from memory.proactive import morning_briefing
+    threading.Thread(target=morning_briefing, daemon=True).start()
+    return True
+
 # ── Main Router ───────────────────────────────────────────
 def route(assistant: str, command: str) -> None:
     """
@@ -112,6 +133,7 @@ def route(assistant: str, command: str) -> None:
         if _handle_exit(c):          return
         if _handle_engine_switch(c): return
         if _handle_time_date(c):     return
+        if _handle_briefing(c):      return
 
         # ── Classify intent ──
         intent     = classify(command)
@@ -124,6 +146,8 @@ def route(assistant: str, command: str) -> None:
             handle_weather, handle_news = _weather_news()
 
             _intent_map = {
+                "calendar": lambda: _calendar()(command),
+                "email":    lambda: _email()(command),     
                 "spotify":  lambda: _spotify()(c),
                 "weather":  lambda: handle_weather(c),
                 "news":     lambda: handle_news(c),
@@ -147,6 +171,8 @@ def route(assistant: str, command: str) -> None:
         # ── Linear fallback — catches low confidence + missed intents ──
         # Proper-noun handlers receive original command
         if _memory()(command):       return
+        if _calendar()(command):     return
+        if _email()(command):        return
         if _sys()(c):                return
         if _spotify()(c):            return
         if _whatsapp()(command):     return

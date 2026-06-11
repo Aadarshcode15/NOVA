@@ -425,6 +425,20 @@ class NovaWindow(QMainWindow):
     # ── Fullscreen ────────────────────────────────────────
     def _toggle_fs(self):
         self.showNormal() if self.isFullScreen() else self.showFullScreen()
+        
+    def closeEvent(self, event) -> None:
+        """Minimise to tray instead of quitting when window is closed."""
+        if hasattr(self, "_tray") and self._tray:
+            event.ignore()
+            self.hide()
+            self._tray.notify(
+                "N.O.V.A",
+                "Running in the background.\n"
+                "Double-click the tray icon to restore."
+            )
+        else:
+            event.accept()
+
 
     # ── Keys ──────────────────────────────────────────────
     def keyPressEvent(self, event):

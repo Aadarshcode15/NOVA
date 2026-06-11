@@ -85,6 +85,21 @@ _FAST_INTENTS: list[tuple] = [
     # Vision
     (r"^(what'?s? on (my )?screen|look at my screen)",       "vision",  "describe",   {}),
     (r"^(describe|analyse|analyze) (my )?screen$",           "vision",  "describe",   {}),
+
+    # Calendar
+    (r"^(what'?s?|do i have|check) (on |my )?calendar",  "calendar", "read",   {}),
+    (r"^(my|today'?s?|tomorrow'?s?) schedule$",           "calendar", "read",   {}),
+    (r"^(what do i have|do i have anything) (today|tomorrow|this week)", "calendar", "read", {}),
+    (r"^(any|my) (meetings?|events?|appointments?) (today|tomorrow)",    "calendar", "read", {}),
+    (r"^(add|create|schedule|book) (a |an )?(meeting|event|appointment)","calendar", "create",{}),
+    (r"^(what'?s? my next|next) (meeting|event)$",        "calendar", "read",   {}),
+
+    # Email
+    (r"^(check|read|get) my (emails?|inbox|gmail|mail)$",     "email", "read",   {}),
+    (r"^(any|do i have|check for) (new |unread )?(emails?|mail)","email","read",  {}),
+    (r"^(send|write|compose) (an? )?email",                    "email", "send",   {}),
+    (r"^(summarize|read) (that |my |the )?(last |latest )?email","email","read",  {}),
+    (r"^email(s?) from\b",                                     "email", "search", {}),
 ]
 
 def _fast_classify(text: str) -> dict | None:
@@ -252,6 +267,8 @@ def _keyword_fallback(text: str) -> dict:
         (("news", "headline", "today"),                             "news"),
         (("remind", "reminder", "alarm"),                           "reminder"),
         (("todo", "to do", "task", "list"),                         "todo"),
+        (("calendar", "schedule", "meeting", "appointment", "event"),   "calendar"),
+        (("email", "gmail", "inbox", "mail", "unread"),                 "email"),
         (("whatsapp", "message", "send", "text"),                   "whatsapp"),
         (("open", "launch", "volume", "brightness", "battery"),     "system"),
         (("youtube", "video", "watch"),                             "youtube"),

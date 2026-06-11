@@ -348,10 +348,18 @@ def audio_loop() -> None:
 
             # Single word noise filter
             words = cl.split()
-            known = {"nova","sora","time","date","news",
-                     "weather","battery","help","stop"}
-            if len(words) == 1 and words[0] not in known:
-                print(f"[Voice] Noise ignored: {command}")
+            known = {
+                "nova", "sora", "time", "date", "news",
+                "weather", "battery", "help", "stop",
+                "yes", "no", "ok", "okay", "sure",
+                "pause", "resume", "next",
+                "briefing",    # was being heard as "breathing"
+                "calendar",    # short trigger
+                "emails",      # short trigger
+                "schedule",    # short trigger
+            }
+            if len(words) == 1 and words[0].rstrip(".,!?") not in known:
+                log.debug(f"[Voice] Noise ignored: {command}")
                 set_state(VoiceState.LISTENING); continue
 
             _fire("transcript", {"who": "user", "text": command})
