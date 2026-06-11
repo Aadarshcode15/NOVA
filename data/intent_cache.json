@@ -30,5 +30,13 @@
     "target": "NOAA",
     "entities": {},
     "context_dependent": false
+  },
+  "what's on my calendar?": {
+    "category": "system",
+    "confidence": 0.95,
+    "action": "open",
+    "target": "calendar",
+    "entities": {},
+    "context_dependent": false
   }
 }

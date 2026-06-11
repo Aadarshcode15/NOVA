@@ -2,9 +2,6 @@
 .venv/
 venv/
 
-# logs
-logs/
-
 # Python cache
 __pycache__/
 *.pyc
@@ -15,26 +12,25 @@ __pycache__/
 # Environment files
 .env
 
-# Secret keys
-.webui_secret_key
+# ── SECRET FILES — NEVER COMMIT THESE ──
+config/credentials.json
+config/contacts.json
+config/email_contacts.json
+data/token_calendar.json
+data/token_gmail.json
 
-# Database / temp
+# Large model files
+kokoro-v1.0.onnx
+voices-v1.0.bin
+
+# Logs and temp
+logs/
 *.db
 *.sqlite3
+.cache
+Pywhatkit_DB.txt
+long_term_memory.json
 
 # OS files
 .DS_Store
 Thumbs.db
-
-#others
-kokoro-v1.0.onnx
-Pywhatkit_DB.txt
-voices-v1.0.bin
-.cache
-
-contacts.json
-long_term.json
-token_calendar.json
-intent_cache.json
-credentials.json
-email_contacts.json
