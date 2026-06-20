@@ -12,25 +12,40 @@ __pycache__/
 # Environment files
 .env
 
-# ── SECRET FILES — NEVER COMMIT THESE ──
-config/credentials.json
-config/contacts.json
-config/email_contacts.json
-data/token_calendar.json
-data/token_gmail.json
+# Secret keys
+.webui_secret_key
 
-# Large model files
-kokoro-v1.0.onnx
-voices-v1.0.bin
-
-# Logs and temp
-logs/
+# Database / temp
 *.db
 *.sqlite3
-.cache
-Pywhatkit_DB.txt
-long_term_memory.json
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# Models / large binaries
+kokoro-v1.0.onnx
+voices-v1.0.bin
+.cache
+
+# ── Google OAuth — NEVER COMMIT ──────────────────────────
+config/credentials.json
+data/token_calendar.json
+data/token_gmail.json
+
+# ── Personal data ─────────────────────────────────────────
+config/contacts.json
+config/email_contacts.json
+memory/long_term.json
+
+# ── Browser automation — contains login session cookies ──
+data/browser_profile/
+
+# ── Generated / regenerable — keep repo clean ─────────────
+data/intent_cache.json
+data/reminders/
+config/user_config.json
+logs/
+
+# ── Misc generated ─────────────────────────────────────────
+Pywhatkit_DB.txt

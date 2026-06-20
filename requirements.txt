@@ -31,7 +31,7 @@ win10toast
 requests
 beautifulsoup4
 ddgs
-# playwright                 # REMOVED: premature — added back in Sprint 3
+playwright                
 
 # ── Spotify ─────────────────────────────────────────────────
 spotipy
@@ -46,6 +46,7 @@ yt-dlp
 # ── Files / Images ──────────────────────────────────────────
 send2trash
 Pillow
+pypdf          # PDF text extraction
 
 # ── Face Recognition (optional) ─────────────────────────────
 opencv-contrib-python

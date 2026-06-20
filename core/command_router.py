@@ -64,6 +64,14 @@ def _email():
     from actions.email import handle_email
     return handle_email
 
+def _browser():
+    from actions.browser import handle_browser
+    return handle_browser
+
+def _file_analyzer():
+    from actions.file_analyzer import handle_file_command
+    return handle_file_command
+
 # ── Engine switch commands ─────────────────────────────────
 def _handle_engine_switch(command: str) -> bool:
     c = command.lower()
@@ -113,6 +121,60 @@ def _handle_briefing(command: str) -> bool:
     threading.Thread(target=morning_briefing, daemon=True).start()
     return True
 
+def _handle_settings(command: str) -> bool:
+    if not any(k in command for k in ("open settings", "show settings",
+                                       "settings panel", "change settings",
+                                       "configure nova")):
+        return False
+    # Signal the UI to open settings (via a Qt signal)
+    try:
+        from PyQt6.QtWidgets import QApplication
+        for widget in QApplication.topLevelWidgets():
+            if hasattr(widget, "_open_settings"):
+                widget._open_settings()
+                return True
+    except Exception:
+        pass
+    from core.voice import speak
+    speak("Click the Settings button in the left panel.")
+    return True
+
+def _handle_history_search(command: str) -> bool:
+    c = command.lower()
+    triggers = (
+        "search my history for", "search my conversations for",
+        "search conversation history for", "find in my history",
+        "what did i say about", "what did i ask about",
+        "did we talk about", "did i ask you about",
+        "search history for",
+    )
+    matched = next((t for t in triggers if t in c), None)
+    if not matched:
+        return False
+
+    query_text = c.replace(matched, "").strip().strip(".,!?")
+    if not query_text:
+        speak("What would you like me to search for in our past conversations?")
+        return True
+
+    from core.conversation_log import search
+    rows = search(query_text, limit=8)
+    if not rows:
+        speak(f"I couldn't find anything about {query_text} in our past conversations.")
+        return True
+
+    from core.engine import raw_query
+    chronological = list(reversed(rows))
+    context = "\n".join(f"{role}: {content}" for _, _, role, content in chronological)
+    summary = raw_query(
+        f"Here are excerpts from past conversations matching '{query_text}':\n\n"
+        f"{context[:2000]}\n\n"
+        f"Summarize in 2-3 spoken sentences what was discussed. No markdown.",
+        system="You summarize conversation history for a voice assistant. Be brief and natural."
+    )
+    speak(summary or f"I found {len(rows)} mentions of {query_text} in our past conversations.")
+    return True
+
 # ── Main Router ───────────────────────────────────────────
 def route(assistant: str, command: str) -> None:
     """
@@ -134,6 +196,9 @@ def route(assistant: str, command: str) -> None:
         if _handle_engine_switch(c): return
         if _handle_time_date(c):     return
         if _handle_briefing(c):      return
+        if _handle_settings(c):      return
+        if _handle_history_search(command):  return
+        if _file_analyzer()(command): return
 
         # ── Classify intent ──
         intent     = classify(command)
@@ -162,6 +227,7 @@ def route(assistant: str, command: str) -> None:
                 "search":   lambda: _search()(c),
                 "memory":   lambda: _memory()(command),
                 "vision":   lambda: _vision()(c),
+                "browser":  lambda: _browser()(command),   
             }
 
             handler = _intent_map.get(category)
@@ -187,6 +253,7 @@ def route(assistant: str, command: str) -> None:
         if _code()(command):         return   # before files — "create X" is code, not file op
         if _files()(command):        return
         if _desktop()(c):            return
+        if _browser()(command):      return
         if _search()(c):             return
 
         # ── AI fallback ──

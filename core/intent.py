@@ -100,6 +100,11 @@ _FAST_INTENTS: list[tuple] = [
     (r"^(send|write|compose) (an? )?email",                    "email", "send",   {}),
     (r"^(summarize|read) (that |my |the )?(last |latest )?email","email","read",  {}),
     (r"^email(s?) from\b",                                     "email", "search", {}),
+
+    # Browser
+    (r"^browse to\b",                                      "browser", "navigate", {}),
+    (r"^(search|find) (jobs )?on (amazon|flipkart|linkedin|github)", "browser", "search", {}),
+    (r"^close (the )?browser$",                             "browser", "close",    {}),
 ]
 
 def _fast_classify(text: str) -> dict | None:
@@ -153,6 +158,7 @@ Categories (pick exactly one):
   memory    - remember/forget personal info about the user
   vision    - describe or analyse the screen
   desktop   - wallpaper, organise desktop
+  browser   - search/browse specific websites (Amazon, Flipkart, LinkedIn, GitHub), click page elements
   general   - anything that doesn't fit above
 
 JSON schema (all fields required):
@@ -268,6 +274,7 @@ def _keyword_fallback(text: str) -> dict:
         (("remind", "reminder", "alarm"),                           "reminder"),
         (("todo", "to do", "task", "list"),                         "todo"),
         (("calendar", "schedule", "meeting", "appointment", "event"),   "calendar"),
+        (("browse", "amazon", "flipkart", "linkedin job"),               "browser"),
         (("email", "gmail", "inbox", "mail", "unread"),                 "email"),
         (("whatsapp", "message", "send", "text"),                   "whatsapp"),
         (("open", "launch", "volume", "brightness", "battery"),     "system"),

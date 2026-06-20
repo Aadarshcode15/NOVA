@@ -20,11 +20,6 @@ TIMEZONE    = "Asia/Kolkata"
 # ── Auth ───────────────────────────────────────────────────
 
 def _get_service():
-    """
-    Returns an authenticated Google Calendar service.
-    Opens browser for OAuth on first run, then uses saved token.
-    Raises _AuthRequired if credentials.json is missing.
-    """
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
     from google.auth.transport.requests import Request
@@ -41,14 +36,26 @@ def _get_service():
     if TOKEN_FILE.exists():
         creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
 
-    # Refresh or re-auth if needed
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
+    # Try to refresh if expired
+    if creds and creds.expired and creds.refresh_token:
+        try:
             creds.refresh(Request())
-        else:
-            flow  = InstalledAppFlow.from_client_secrets_file(str(CREDS_FILE), SCOPES)
-            creds = flow.run_local_server(port=0)
+        except Exception as e:
+            # invalid_grant = token revoked or credentials replaced
+            # Auto-delete stale token and fall through to full re-auth
+            if "invalid_grant" in str(e) or "invalid_client" in str(e):
+                log.warning("[Calendar] Token expired/revoked — clearing and re-authenticating.")
+                TOKEN_FILE.unlink(missing_ok=True)
+                creds = None
+            else:
+                raise
+
+    # Full re-auth if no valid creds (first run or after token cleared above)
+    if not creds or not creds.valid:
+        flow  = InstalledAppFlow.from_client_secrets_file(str(CREDS_FILE), SCOPES)
+        creds = flow.run_local_server(port=0)
         TOKEN_FILE.write_text(creds.to_json())
+        log.info("[Calendar] New token saved.")
 
     return build("calendar", "v3", credentials=creds)
 

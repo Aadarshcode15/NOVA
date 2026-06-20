@@ -5,11 +5,14 @@ import speech_recognition as sr
 from core.logger import log
 
 # ── Model config ───────────────────────────────────────────
-# tiny  =  39 MB  ~0.5s  — fastest, lower accuracy
-# base  =  74 MB  ~0.8s  — fast, decent accuracy
-# small = 461 MB  ~1.5s  — best balance  ← default
-_MODEL_SIZE    = "small.en"  # English-only models are smaller + more accurate for English speech you can remove en suffix to get multilingual versions, but they may hallucinate Devanagari output for Hindi speech
-_COMPUTE_TYPE  = "int8"      # quantised — faster + less RAM, same accuracy
+# Accuracy/speed tradeoff:
+#   small.en       ~1.5s   — fast, decent accuracy        (previous)
+#   medium.en      ~3-4s   — noticeably more accurate
+#   large-v3-turbo ~3-5s   — best accuracy, distilled for speed   ← current
+# Groq API handles accuracy online — local model is offline fallback only.
+# small.en is fast enough for that role.
+_MODEL_SIZE    = "small.en"   # local offline fallback
+_COMPUTE_TYPE  = "int8"
 _DEVICE        = "cpu"
 
 # ── NOVA vocabulary prompt ─────────────────────────────────
@@ -33,7 +36,6 @@ _NOVA_PROMPT = (
     f"search for, what is, who is, how to, tell me about, "
     f"switch to Gemini, switch to Groq, switch to Ollama, "
     f"remember that, what do you know about me, "
-    # Sprint 3 vocabulary — words Whisper struggled with
     f"morning briefing, daily briefing, give me my briefing, "
     f"run the briefing, start briefing, "
     f"check my emails, read my emails, any new emails, unread emails, "
@@ -42,6 +44,9 @@ _NOVA_PROMPT = (
     f"add to my calendar, create an event, schedule a meeting, "
     f"create a portfolio, create a website, build a calculator, "
     f"write a program, write a script, list my codes."
+    f"browse to, search Amazon for, search Flipkart for, "
+    f"search LinkedIn for, find jobs on LinkedIn, close the browser, "
+    f"what's on this page, summarize this page, click on, click the."
 )
 
 _model      = None
@@ -55,18 +60,34 @@ def load_model() -> bool:
     with _model_lock:
         if _model is not None:
             return True
+
+        from faster_whisper import WhisperModel
+
+        # ── Try the primary model first ──
         try:
-            from faster_whisper import WhisperModel
             log.info(f"[STT] Loading faster-whisper '{_MODEL_SIZE}' ({_COMPUTE_TYPE})...")
             _model = WhisperModel(
                 _MODEL_SIZE,
                 device       = _DEVICE,
                 compute_type = _COMPUTE_TYPE,
             )
-            log.info("[STT] Whisper ready.")
+            log.info(f"[STT] Whisper ready ({_MODEL_SIZE}).")
             return True
         except Exception as e:
-            log.error(f"[STT] Failed to load Whisper: {e}")
+            log.warning(f"[STT] '{_MODEL_SIZE}' unavailable ({e}). "
+                       f"Falling back to '{_FALLBACK_SIZE}'...")
+
+        # ── Fallback if turbo isn't supported by this faster-whisper version ──
+        try:
+            _model = WhisperModel(
+                _FALLBACK_SIZE,
+                device       = _DEVICE,
+                compute_type = _COMPUTE_TYPE,
+            )
+            log.info(f"[STT] Whisper ready (fallback: {_FALLBACK_SIZE}).")
+            return True
+        except Exception as e:
+            log.error(f"[STT] Both models failed to load: {e}")
             return False
 
 
@@ -107,78 +128,136 @@ def _is_repetitive(text: str) -> bool:
     remainder = " ".join(words[chunk:]).lower()
     return first in remainder
 
+def _transcribe_groq(audio: sr.AudioData) -> str:
+    """
+    Transcribe using Groq's hosted Whisper large-v3-turbo API.
+    ~0.5s latency, large-v3-turbo accuracy, uses existing GROQ_API_KEY.
+    No new API key or account needed.
+    Returns empty string on any failure so caller falls back to local.
+    """
+    import os
+    import tempfile
+    from groq import Groq
+    from config.settings import GROQ_API_KEY
+
+    if not GROQ_API_KEY:
+        return ""
+
+    # Convert AudioData → WAV bytes at 16kHz
+    wav_bytes = audio.get_wav_data(convert_rate=16000, convert_width=2)
+
+    # Must be at least 0.5s of audio or Groq rejects it
+    if len(wav_bytes) < 16000:
+        return ""
+
+    # Write to temp file — Groq API requires a file object
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            f.write(wav_bytes)
+            tmp_path = f.name
+
+        client = Groq(api_key=GROQ_API_KEY)
+        with open(tmp_path, "rb") as f:
+            result = client.audio.transcriptions.create(
+                file            = ("audio.wav", f.read()),
+                model           = "whisper-large-v3-turbo",
+                language        = "en",
+                prompt          = _NOVA_PROMPT,   # same vocab hint as local model
+                response_format = "text",         # returns plain string directly
+            )
+
+        text = result.strip() if isinstance(result, str) else getattr(result, "text", "").strip()
+        if text:
+            log.debug(f"[STT] Groq Whisper: '{text}'")
+        return text
+
+    except Exception as e:
+        log.debug(f"[STT] Groq Whisper unavailable: {e}")
+        return ""
+    finally:
+        if tmp_path:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
 
 # ── Main transcription ─────────────────────────────────────
 
 def transcribe(audio: sr.AudioData) -> str:
     """
-    Transcribe using faster-whisper.
+    Transcription priority chain:
+      1. Groq Whisper API  — fast (~0.5s), large-v3-turbo accuracy
+      2. Local faster-whisper — offline fallback (small.en, ~1.5s)
+      3. Caller falls back to Google STT if we return ""
 
-    Key improvements over openai-whisper:
-    - vad_filter: built-in silence detection — skips non-speech automatically
-    - language="en": forces English output — prevents Devanagari/Romanised Hindi
-    - avg_logprob filter: rejects low-confidence segments
-    - 4x faster on CPU via int8 quantisation
+    Hallucination filters applied regardless of which path ran.
     """
-    global _model
+    # ── 1. Groq API ───────────────────────────────────────
+    text = _transcribe_groq(audio)
+    if text:
+        # Still apply filters — Groq can also hallucinate on silence
+        if text.lower().rstrip(".!? ") in _HALLUCINATIONS:
+            log.debug(f"[STT] Groq hallucination filtered: '{text}'")
+            return ""
+        if len(text.split()) > 20:
+            log.debug(f"[STT] Groq: rejected long output ({len(text.split())} words)")
+            return ""
+        if _is_repetitive(text):
+            log.debug(f"[STT] Groq: rejected repetitive output")
+            return ""
+        log.info(f"[STT] Groq ✓ '{text}'")
+        return text
 
+    # ── 2. Local faster-whisper ───────────────────────────
+    log.debug("[STT] Groq unavailable — using local Whisper")
+
+    global _model
     if _model is None:
         if not load_model():
             return ""
 
     try:
         audio_np = _to_numpy(audio)
-
-        # Skip clips shorter than 0.5s
         if len(audio_np) < 8000:
             return ""
 
-        segments, info = _model.transcribe(
-            audio_np,
-            language         = "en",    # force English — prevents Devanagari output
-            beam_size        = 5,    
-            initial_prompt   = _NOVA_PROMPT,   # was 5 default — slightly faster, still accurate
-            vad_filter       = True,    # skip silent/non-speech regions automatically
-            vad_parameters   = dict(
-                min_silence_duration_ms = 400,
-                speech_pad_ms           = 200,
-            ),
-            condition_on_previous_text = False,  # prevent hallucination loops
-            temperature                = 0.0,    # deterministic
-        )
+        with _model_lock:
+            segments, info = _model.transcribe(
+                audio_np,
+                language                   = "en",
+                beam_size                  = 5,
+                vad_filter                 = True,
+                vad_parameters             = dict(
+                    min_silence_duration_ms = 400,
+                    speech_pad_ms           = 300,
+                ),
+                condition_on_previous_text = False,
+                temperature                = 0.0,
+                initial_prompt             = _NOVA_PROMPT,
+            )
 
-        # Collect segments, filtering low-confidence ones
         parts = []
         for seg in segments:
-            # avg_logprob: 0.0 = perfect, -1.0 = very uncertain
-            # no_speech_prob: 1.0 = definitely silence
             if seg.avg_logprob < -0.8:
-                log.debug(f"[STT] Low confidence segment skipped: '{seg.text.strip()}'")
                 continue
             if seg.no_speech_prob > 0.7:
-                log.debug(f"[STT] No-speech segment skipped: '{seg.text.strip()}'")
                 continue
             parts.append(seg.text.strip())
 
         text = " ".join(parts).strip()
 
-        # Hallucination filters
         if text.lower().rstrip(".!? ") in _HALLUCINATIONS:
-            log.debug(f"[STT] Filtered hallucination: '{text}'")
             return ""
-
         if len(text.split()) > 20:
-            log.debug(f"[STT] Rejected: too long ({len(text.split())} words)")
             return ""
-
         if _is_repetitive(text):
-            log.debug(f"[STT] Rejected repetitive: '{text[:50]}'")
             return ""
 
         if text:
-            log.info(f"[STT] Whisper: '{text}'")
+            log.info(f"[STT] Local ✓ '{text}'")
         return text
 
     except Exception as e:
-        log.error(f"[STT] Transcription error: {e}")
+        log.error(f"[STT] Local Whisper error: {e}")
         return ""

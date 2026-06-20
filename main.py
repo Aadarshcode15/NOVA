@@ -51,6 +51,15 @@ def main():
     from memory.memory_manager import load_memory, save_memory, migrate_v1_to_v2
     save_memory(migrate_v1_to_v2(load_memory()))
 
+    # ── Apply user settings ──
+    from config.user_config import apply_all
+    apply_all()
+    log.info("[Config] User settings applied.")
+
+    # ── Initialise conversation history database ──
+    from core.conversation_log import init_db
+    init_db()
+
     # ── Start proactive briefing scheduler ──
     from memory.proactive import start_briefing_scheduler
     start_briefing_scheduler()

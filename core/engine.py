@@ -80,6 +80,13 @@ def clear_history() -> None:
     with _history_lock:
         _conversation_history.clear()
 
+def _log_conversation(assistant: str, role: str, content: str, engine: str = "") -> None:
+    """Best-effort persistent logging — never breaks the response flow."""
+    try:
+        from core.conversation_log import log_message
+        log_message(assistant, role, content, engine)
+    except Exception as e:
+        log.debug(f"[Engine] Conversation log skipped: {e}")
 
 # ── Prompt Builders ────────────────────────────────────────
 
@@ -393,6 +400,7 @@ def query(text: str, assistant: str = None, engine: str = None,
     # Step 1 — record user turn (skip for internal action handler calls)
     if not skip_history:
         add_to_history("user", text)
+        _log_conversation(asst, "user", text)
 
     # Track usage stats
     if eng in _engine_stats:
@@ -424,5 +432,6 @@ def query(text: str, assistant: str = None, engine: str = None,
 # Step 3 — record assistant response (skip for internal calls)
     if not skip_history:
         add_to_history("assistant", response)
+        _log_conversation(asst, "assistant", response, eng)
 
     return response

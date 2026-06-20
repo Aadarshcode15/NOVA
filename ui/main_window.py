@@ -95,6 +95,28 @@ class NovaWindow(QMainWindow):
         lay.addWidget(self._btn_ollama)
         self._refresh_engine_btns()
         self._div(lay)
+        # ── Settings button ──
+        settings_btn = QPushButton("⚙  SETTINGS")
+        settings_btn.setFixedHeight(30)
+        settings_btn.setStyleSheet(
+            "QPushButton{background:transparent;border:1px solid #1a3a50;"
+            "color:#2a4a5e;font-size:9px;font-weight:bold;letter-spacing:2px;padding:4px;}"
+            "QPushButton:hover{border:1px solid #00c8ff55;color:#00c8ff;}"
+        )
+        settings_btn.clicked.connect(self._open_settings)
+        lay.addWidget(settings_btn)
+        self._div(lay)
+
+        history_btn = QPushButton("🔍  HISTORY")
+        history_btn.setFixedHeight(30)
+        history_btn.setStyleSheet(
+            "QPushButton{background:transparent;border:1px solid #1a3a50;"
+            "color:#2a4a5e;font-size:9px;font-weight:bold;letter-spacing:2px;padding:4px;}"
+            "QPushButton:hover{border:1px solid #00c8ff55;color:#00c8ff;}"
+        )
+        history_btn.clicked.connect(self._open_history)
+        lay.addWidget(history_btn)
+        self._div(lay)
 
         # ── SORA switch button ──
         self._sora_btn = QPushButton("⟳  SWITCH TO SORA")
@@ -390,14 +412,32 @@ class NovaWindow(QMainWindow):
 
     # ── Upload ────────────────────────────────────────────
     def _on_upload(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Upload File", str(Path.home()),
-            "All Files (*.*)")
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Upload File", str(Path.home()),
+            "All Files (*.*);;Images (*.jpg *.jpeg *.png *.gif *.bmp *.webp);;"
+            "PDFs (*.pdf);;Code (*.py *.js *.html *.css *.java *.cpp *.ts *.sql);;"
+            "Text (*.txt *.md *.csv *.json)"
+        )
         if path:
             self._uploaded_file = path
             fname = Path(path).name
             self._upload_lbl.setText(f"✓ {fname}")
             self._upload_lbl.setStyleSheet("color:#00c8ff;font-size:9px;")
             self._append_log("sys", f"[ File loaded: {fname} ]")
+            # Trigger immediate file analysis in background
+            self._trigger_file_analysis(path)
+
+    def _trigger_file_analysis(self, filepath: str) -> None:
+        """Analyse uploaded file in background — NOVA speaks immediately."""
+        import threading
+        from actions.file_analyzer import load_and_announce
+        thread = threading.Thread(
+            target = load_and_announce,
+            args   = (filepath,),
+            daemon = True,
+            name   = "FileAnalyzer"
+        )
+        thread.start()
 
     # ── Mute ──────────────────────────────────────────────
     def _on_mute(self):
@@ -463,3 +503,14 @@ class NovaWindow(QMainWindow):
             self._upload_lbl.setText(f"✓ {fname}")
             self._upload_lbl.setStyleSheet("color:#00c8ff;font-size:9px;")
             self._append_log("sys", f"[ File loaded: {fname} ]")
+            self._trigger_file_analysis(path)
+
+    def _open_settings(self) -> None:
+        from ui.settings_panel import SettingsPanel
+        panel = SettingsPanel(self)
+        panel.exec()
+
+    def _open_history(self) -> None:
+        from ui.history_search import HistorySearchPanel
+        panel = HistorySearchPanel(self)
+        panel.exec()
