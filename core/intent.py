@@ -5,6 +5,7 @@ import threading
 from pathlib import Path
 from config.settings import BASE_DIR, GROQ_API_KEY, GROQ_MODEL
 from core.logger import log
+from core import perf
 
 # ── Persistent cache ───────────────────────────────────────
 # Survives restarts — "play something chill" only hits Groq once ever.
@@ -56,6 +57,15 @@ _FAST_INTENTS: list[tuple] = [
     (r"^open .+",                                            "system",  "open",       {}),
     (r"^launch .+",                                          "system",  "open",       {}),
 
+    # Journal — must be first because "note" also matches todo triggers
+    (r"^(add |record |start |new )?(a )?(voice note|voice journal|journal entry)$",
+                                                           "journal", "add",  {}),
+    (r"^voice note[,:]? ?(.*)$",                           "journal", "add",  {}),
+    (r"^add (a )?note[,:]? ?(.*)$",                        "journal", "add",  {}),
+    (r"^(read |open )?(my )?(journal|voice notes?|today'?s? notes?)$",
+                                                           "journal", "read", {}),
+    (r"^what did i note\b",                                "journal", "read", {}),
+
     # Spotify
     (r"^(pause|stop) (music|spotify|song|the music)$",       "spotify", "pause",      {}),
     (r"^(resume|continue|unpause)( music| spotify)?$",       "spotify", "resume",     {}),
@@ -102,9 +112,39 @@ _FAST_INTENTS: list[tuple] = [
     (r"^email(s?) from\b",                                     "email", "search", {}),
 
     # Browser
-    (r"^browse to\b",                                      "browser", "navigate", {}),
+    (r"^browse to\b",                                        "browser", "navigate", {}),
     (r"^(search|find) (jobs )?on (amazon|flipkart|linkedin|github)", "browser", "search", {}),
-    (r"^close (the )?browser$",                             "browser", "close",    {}),
+    (r"^open (amazon|flipkart|linkedin|github).*(search|find|for)\b","browser", "search", {}),
+    (r"^close (the )?browser$",                              "browser", "close",    {}),
+
+    # Clipboard
+    (r"^(see|check|read|show|analyze|what'?s? in) (my |the )?clipboard$", "clipboard", "check", {}),
+    (r"^(what did i copy|what have i copied|smart clipboard)$",            "clipboard", "check", {}),
+
+    # Macros
+    (r"^record \w+",                            "macro", "record", {}),
+    (r"^(run|play|execute) \w+",                "macro", "run",    {}),
+    (r"^(list|show) (my )?(routines?|macros?)$","macro", "list",   {}),
+    (r"^stop recording$",                        "macro", "stop",   {}),
+
+    # System — expanded
+    (r"^(open|launch|start) \w+",                               "system",   "open",       {}),
+    (r"^(close|quit|exit) \w+",                                 "system",   "close",      {}),
+    (r"^(set |increase |decrease |raise |lower )?(volume|brightness)", "system", "control", {}),
+    (r"^(take a? |capture )?screenshot$",                       "system",   "screenshot", {}),
+    (r"^(check |my )?battery$",                                 "system",   "battery",    {}),
+
+    # Spotify — expanded
+    (r"^play\b",                                                "spotify",  "play",       {}),
+    (r"^(play .+|.+ on spotify)$",                              "spotify",  "play",       {}),
+    (r"^(volume (up|down)|louder|quieter)$",                    "system",   "volume",     {}),
+
+    # Search — common factual patterns
+    (r"^(who|what|where|when|why|how) (is|are|was|were|did)\b","search",   "query",      {}),
+    (r"^tell me about\b",                                       "search",   "query",      {}),
+
+    # Alerts
+    (r"^(system alerts?|alert status|check alerts?)$",          "system",   "alerts",     {}),
 ]
 
 def _fast_classify(text: str) -> dict | None:
@@ -232,6 +272,7 @@ def classify(command: str) -> dict:
     if fast:
         _last_category = fast["category"]
         log.debug(f"[Intent] Fast: {fast['category']} ({fast['confidence']:.0%})")
+        perf.mark("intent")
         return fast
 
     # ── 2. Cache hit ──
@@ -240,6 +281,7 @@ def classify(command: str) -> dict:
             cached = _cache[cache_key]
             _last_category = cached["category"]
             log.debug(f"[Intent] Cache: {cached['category']} ({cached['confidence']:.0%})")
+            perf.mark("intent")
             return cached
 
     # ── 3. Groq AI classification ──
@@ -254,6 +296,7 @@ def classify(command: str) -> dict:
         _last_category = result["category"]
         _save_to_cache(cache_key, result)
         log.info(f"[Intent] Groq: {result['category']} ({result.get('confidence', 0):.0%}) ← {text[:50]}")
+        perf.mark("intent")
         return result
 
     except Exception as e:
@@ -262,6 +305,7 @@ def classify(command: str) -> dict:
     # ── 4. Keyword fallback ──
     fallback = _keyword_fallback(cache_key)
     _last_category = fallback["category"]
+    perf.mark("intent")
     return fallback
 
 
@@ -272,6 +316,7 @@ def _keyword_fallback(text: str) -> dict:
         (("weather", "temperature", "forecast", "raining"),         "weather"),
         (("news", "headline", "today"),                             "news"),
         (("remind", "reminder", "alarm"),                           "reminder"),
+        (("voice note", "journal", "voice journal"),                  "journal"),
         (("todo", "to do", "task", "list"),                         "todo"),
         (("calendar", "schedule", "meeting", "appointment", "event"),   "calendar"),
         (("browse", "amazon", "flipkart", "linkedin job"),               "browser"),
@@ -284,6 +329,9 @@ def _keyword_fallback(text: str) -> dict:
         (("what is", "who is", "how to", "search", "find"),         "search"),
         (("remember", "forget", "memory"),                          "memory"),
         (("screen", "look at"),                                     "vision"),
+        (("clipboard", "copied", "what did i copy"),    "clipboard"),
+        (("record routine", "run routine", "macro"),     "macro"),
+        (("journal", "voice note", "what did i note"),  "journal"),
     ]
     for keywords, category in rules:
         if any(k in text for k in keywords):

@@ -423,7 +423,17 @@ def query(text: str, assistant: str = None, engine: str = None,
                 response = result
                 break
         except Exception as e:
-            log.error(f"[Engine] {attempt.upper()} failed: {e}")
+            err = str(e)
+            if "prepayment credits are depleted" in err or (
+                "billing" in err.lower() and "RESOURCE_EXHAUSTED" in err
+            ):
+                log.error(
+                    f"[Engine] GEMINI billing: prepayment credits depleted. "
+                    f"Visit https://aistudio.google.com to recharge. "
+                    f"Falling back to next engine."
+                )
+            else:
+                log.error(f"[Engine] {attempt.upper()} failed: {e}")
             continue
 
     if not response:

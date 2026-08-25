@@ -1,48 +1,37 @@
 # ui/main_window.py
-import os
 import datetime
+import threading
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QLabel, QPushButton,
-    QTextEdit, QLineEdit, QFileDialog,
-    QHBoxLayout, QVBoxLayout, QFrame, QSizePolicy
+    QLineEdit, QFileDialog, QScrollArea,
+    QHBoxLayout, QVBoxLayout, QFrame
 )
-from PyQt6.QtCore  import Qt, QTimer, pyqtSignal, QThread, QObject
-from PyQt6.QtGui   import QFont, QTextCursor, QColor, QKeyEvent
+from PyQt6.QtCore  import Qt, QTimer, pyqtSignal
 
 from ui.styles  import MAIN_STYLESHEET
-from ui.widgets import CircularVisualizer, WaveformBar, SystemMonitor
+from ui.widgets import CircularVisualizer, WaveformBar, SystemMonitor, LogEntry
 from core.voice import on as voice_on, speak, speak_nova, speak_sora, VoiceState
 from core.engine import get_engine, get_assistant, set_engine, set_assistant, Engine
 from config.settings import UI_TITLE, UI_SUBTITLE, UI_WIDTH, UI_HEIGHT
 
-class CommandWorker(QObject):
-    finished = pyqtSignal()
-    def __init__(self, assistant, command):
-        super().__init__()
-        self._a = assistant; self._c = command
-    def run(self):
-        from core.command_router import route
-        try: route(self._a, self._c)
-        except SystemExit: pass
-        except Exception as e: print(f"[Worker] {e}")
-        self.finished.emit()
 
 class NovaWindow(QMainWindow):
     sig_log        = pyqtSignal(str, str)
     sig_state      = pyqtSignal(str)
     sig_transcript = pyqtSignal(dict)
     sig_response   = pyqtSignal(dict)
+    sig_nova_mode  = pyqtSignal(str)   # sleep/active mode transitions
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle(UI_TITLE)
         self.resize(UI_WIDTH, UI_HEIGHT)
-        self.setMinimumSize(1100, 700)
+        self.setMinimumSize(1200, 760)
         self.setStyleSheet(MAIN_STYLESHEET)
         self._uploaded_file = None
-        self._muted = False
-        self._threads = []
+        self._muted   = False
+        self._tray    = None
         self._build_ui()
         self._start_clock()
         self._register_voice_callbacks()
@@ -50,263 +39,311 @@ class NovaWindow(QMainWindow):
         self.sig_state.connect(self._on_state)
         self.sig_transcript.connect(lambda d: self._append_log(d["who"], d["text"]))
         self.sig_response.connect(lambda d: self._append_log(d["who"], d["text"]))
-        self._append_log("sys", f"[ N.O.V.A ONLINE — {UI_SUBTITLE} ]")
-        self._append_log("sys", "[ Always listening — speak naturally ]")
-        self._append_log("sys", "─" * 50)
+        self.sig_nova_mode.connect(self._on_nova_mode_change)   # runs on Qt main thread ✓
 
+    # ── Root layout ─────────────────────────────────────
     def _build_ui(self):
         central = QWidget(); central.setObjectName("centralWidget")
         self.setCentralWidget(central)
-        root = QHBoxLayout(central)
-        root.setContentsMargins(0,0,0,0); root.setSpacing(0)
-        root.addWidget(self._build_left())
-        root.addWidget(self._build_center(), 1)
-        root.addWidget(self._build_right())
+        outer = QVBoxLayout(central)
+        outer.setContentsMargins(0, 0, 0, 0); outer.setSpacing(0)
+
+        content = QWidget()
+        content_lay = QHBoxLayout(content)
+        content_lay.setContentsMargins(0, 0, 0, 0); content_lay.setSpacing(0)
+        content_lay.addWidget(self._build_left())
+
+        right_col = QWidget()
+        right_col_lay = QVBoxLayout(right_col)
+        right_col_lay.setContentsMargins(0, 0, 0, 0); right_col_lay.setSpacing(0)
+        right_col_lay.addWidget(self._build_topbar())
+
+        mid_row = QWidget()
+        mid_lay = QHBoxLayout(mid_row)
+        mid_lay.setContentsMargins(0, 0, 0, 0); mid_lay.setSpacing(0)
+        mid_lay.addWidget(self._build_center(), 1)
+        mid_lay.addWidget(self._build_right())
+        right_col_lay.addWidget(mid_row, 1)
+
+        content_lay.addWidget(right_col, 1)
+        outer.addWidget(content, 1)
+        outer.addWidget(self._build_bottombar())
 
     # ── LEFT PANEL ───────────────────────────────────────
     def _build_left(self):
-        p = QWidget(); p.setObjectName("leftPanel"); p.setFixedWidth(155)
-        lay = QVBoxLayout(p); lay.setContentsMargins(10,12,10,12); lay.setSpacing(8)
+        p = QWidget(); p.setObjectName("leftPanel"); p.setFixedWidth(280)
+        lay = QVBoxLayout(p)
+        lay.setContentsMargins(18, 18, 18, 16); lay.setSpacing(14)
 
-        self._sec("● SYS MONITOR", lay)
+        header = QHBoxLayout(); header.setSpacing(10)
+        icon_wrap = QFrame(); icon_wrap.setFixedSize(44, 44)
+        icon_wrap.setStyleSheet("background:#00d4ff14; border:1px solid #00d4ff55; border-radius:10px;")
+        icon_lay = QVBoxLayout(icon_wrap); icon_lay.setContentsMargins(0,0,0,0)
+        icon_glyph = QLabel("◢◤")
+        icon_glyph.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_glyph.setStyleSheet("color:#00d4ff; font-size:14px; font-weight:bold;")
+        icon_lay.addWidget(icon_glyph)
+        header.addWidget(icon_wrap)
+
+        title_col = QVBoxLayout(); title_col.setSpacing(0)
+        t1 = QLabel("N.O.V.A"); t1.setObjectName("brandTitle")
+        t2 = QLabel("NEURAL OPERATIVE\nVIRTUAL ASSISTANT"); t2.setObjectName("brandSubtitle")
+        title_col.addWidget(t1); title_col.addWidget(t2)
+        header.addLayout(title_col); header.addStretch()
+        lay.addLayout(header)
+
+        lay.addWidget(self._section_label("◈  SYSTEM STATUS"))
         self._sys_mon = SystemMonitor()
         lay.addWidget(self._sys_mon)
-        self._div(lay)
+        lay.addWidget(self._divider())
 
-        self._sec("ACTIVE", lay)
-        self._asst_lbl = QLabel("● NOVA-M")
-        self._asst_lbl.setObjectName("assistantLabel")
-        self._asst_lbl.setStyleSheet("color:#00c8ff; font-size:13px; font-weight:bold; letter-spacing:2px;")
-        lay.addWidget(self._asst_lbl)
+        lay.addWidget(self._section_label("◈  CURRENT STATE"))
+        state_row = QHBoxLayout(); state_row.setSpacing(10)
+        self._state_icon = QLabel("∿")
+        self._state_icon.setStyleSheet("color:#00d4ff; font-size:20px;")
+        state_col = QVBoxLayout(); state_col.setSpacing(0)
+        self._state_lbl = QLabel("LISTENING")
+        self._state_lbl.setStyleSheet("color:#00d4ff; font-size:16px; font-weight:800; letter-spacing:1px;")
+        self._state_sub = QLabel("NOVA-M ACTIVE")
+        self._state_sub.setStyleSheet("color:#3c5a70; font-size:8px; letter-spacing:1px;")
+        state_col.addWidget(self._state_lbl); state_col.addWidget(self._state_sub)
+        state_row.addWidget(self._state_icon); state_row.addLayout(state_col); state_row.addStretch()
+        lay.addLayout(state_row)
 
-        self._sec("STATE", lay)
-        self._state_lbl = QLabel("● STANDBY")
-        self._state_lbl.setObjectName("stateLabel")
-        self._state_lbl.setStyleSheet("color:#2a4a5e; font-size:11px; font-weight:bold; letter-spacing:2px;")
-        lay.addWidget(self._state_lbl)
-        self._div(lay)
-
-        self._sec("ENGINE", lay)
+        lay.addWidget(self._section_label("AI ENGINE"))
         self._btn_gemini = self._eng_btn("GEMINI", Engine.GEMINI)
         self._btn_groq   = self._eng_btn("GROQ",   Engine.GROQ)
-        self._btn_ollama = self._eng_btn("OLLAMA",  Engine.OLLAMA)
-        lay.addWidget(self._btn_gemini)
-        lay.addWidget(self._btn_groq)
-        lay.addWidget(self._btn_ollama)
+        self._btn_ollama = self._eng_btn("OLLAMA", Engine.OLLAMA)
+        lay.addWidget(self._btn_gemini); lay.addWidget(self._btn_groq); lay.addWidget(self._btn_ollama)
         self._refresh_engine_btns()
-        self._div(lay)
-        # ── Settings button ──
-        settings_btn = QPushButton("⚙  SETTINGS")
-        settings_btn.setFixedHeight(30)
-        settings_btn.setStyleSheet(
-            "QPushButton{background:transparent;border:1px solid #1a3a50;"
-            "color:#2a4a5e;font-size:9px;font-weight:bold;letter-spacing:2px;padding:4px;}"
-            "QPushButton:hover{border:1px solid #00c8ff55;color:#00c8ff;}"
-        )
-        settings_btn.clicked.connect(self._open_settings)
-        lay.addWidget(settings_btn)
-        self._div(lay)
+        lay.addWidget(self._divider())
 
-        history_btn = QPushButton("🔍  HISTORY")
-        history_btn.setFixedHeight(30)
-        history_btn.setStyleSheet(
-            "QPushButton{background:transparent;border:1px solid #1a3a50;"
-            "color:#2a4a5e;font-size:9px;font-weight:bold;letter-spacing:2px;padding:4px;}"
-            "QPushButton:hover{border:1px solid #00c8ff55;color:#00c8ff;}"
-        )
-        history_btn.clicked.connect(self._open_history)
-        lay.addWidget(history_btn)
-        self._div(lay)
-
-        # ── SORA switch button ──
-        self._sora_btn = QPushButton("⟳  SWITCH TO SORA")
-        self._sora_btn.setFixedHeight(32)
-        self._sora_btn.setStyleSheet(
-            "QPushButton{background:#c084fc22;border:1px solid #c084fc88;"
-            "color:#c084fc;font-size:9px;font-weight:bold;letter-spacing:1px;padding:4px;}"
-            "QPushButton:hover{background:#c084fc44;border:1px solid #c084fc;}"
-        )
-        self._sora_btn.clicked.connect(self._toggle_assistant)
-        lay.addWidget(self._sora_btn)
-        self._div(lay)
-
-        self._sec("VERSION", lay)
-        for label, active in [("AI CORE\nACTIVE", True),("SEC\nCLEARED", True),("V 2 . 0\nREMASTERED", False)]:
-            btn = QPushButton(label)
-            btn.setFixedHeight(40)
-            if active:
-                btn.setStyleSheet(
-                    "QPushButton{background:#00ff8811;border:1px solid #00ff8855;"
-                    "color:#00ff88;font-size:8px;font-weight:bold;letter-spacing:1px;padding:4px;}"
-                )
-            else:
-                btn.setStyleSheet(
-                    "QPushButton{background:#0a1220;border:1px solid #1a3a50;"
-                    "color:#2a4a5e;font-size:8px;font-weight:bold;letter-spacing:1px;padding:4px;}"
-                )
-            lay.addWidget(btn)
+        self._nav_chat  = self._nav_item("💬  CHAT")
+        self._nav_files = self._nav_item("📁  FILES")
+        self._log_count = 0
+        self._nav_log   = self._nav_item("☰  ACTIVITY LOG", badge="0")
+        self._log_badge = self._nav_log._badge_lbl
+        self._nav_settings = self._nav_item("⚙  SETTINGS")
+        self._nav_chat.clicked.connect(lambda: self._cmd.setFocus())
+        self._nav_files.clicked.connect(self._on_upload)
+        self._nav_log.clicked.connect(self._open_history)
+        self._nav_settings.clicked.connect(self._open_settings)
+        for w in (self._nav_chat, self._nav_files, self._nav_log, self._nav_settings):
+            lay.addWidget(w)
 
         lay.addStretch()
-        hint = QLabel("[F4] Mute    [F11] Full")
-        hint.setStyleSheet("color:#1a3a50;font-size:8px;")
-        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.addWidget(hint)
+        self._sora_btn = QPushButton("⟳  SWITCH TO SORA")
+        self._sora_btn.setObjectName("outlineBtn")
+        self._sora_btn.setFixedHeight(34)
+        self._sora_btn.clicked.connect(self._toggle_assistant)
+        lay.addWidget(self._sora_btn)
         return p
+
+    # ── TOP BAR ──────────────────────────────────────────
+    def _build_topbar(self):
+        bar = QWidget(); bar.setObjectName("topBar"); bar.setFixedHeight(64)
+        lay = QHBoxLayout(bar); lay.setContentsMargins(24, 0, 20, 0); lay.setSpacing(14)
+
+        status_dot = QLabel("●"); status_dot.setStyleSheet("color:#00d4ff; font-size:13px;")
+        lay.addWidget(status_dot)
+
+        greet_col = QVBoxLayout(); greet_col.setSpacing(2)
+        self._greeting_lbl = QLabel("Good evening, Operator.")
+        self._greeting_lbl.setObjectName("greetingLabel")
+        status_row = QHBoxLayout(); status_row.setSpacing(6)
+        self._status_text = QLabel("NOVA is listening and ready.")
+        self._status_text.setObjectName("statusLabel")
+        self._status_dot2 = QLabel("●")
+        self._status_dot2.setStyleSheet("color:#22c55e; font-size:8px;")
+        status_row.addWidget(self._status_text); status_row.addWidget(self._status_dot2); status_row.addStretch()
+        greet_col.addWidget(self._greeting_lbl); greet_col.addLayout(status_row)
+        lay.addLayout(greet_col); lay.addStretch()
+
+        time_col = QVBoxLayout(); time_col.setSpacing(0)
+        time_col.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._clock = QLabel("00:00:00"); self._clock.setObjectName("clockLabel")
+        self._clock.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._date = QLabel("—"); self._date.setObjectName("dateLabel")
+        self._date.setAlignment(Qt.AlignmentFlag.AlignRight)
+        time_col.addWidget(self._clock); time_col.addWidget(self._date)
+        lay.addLayout(time_col)
+
+        bell_btn = self._icon_btn("🔔"); bell_btn.clicked.connect(self._open_history)
+        settings_btn = self._icon_btn("⚙"); settings_btn.clicked.connect(self._open_settings)
+        fs_btn = self._icon_btn("⛶"); fs_btn.clicked.connect(self._toggle_fs)
+        for b in (bell_btn, settings_btn, fs_btn):
+            lay.addWidget(b)
+        return bar
+
+    def _icon_btn(self, glyph: str) -> QPushButton:
+        btn = QPushButton(glyph)
+        btn.setObjectName("iconButton")
+        btn.setFixedSize(36, 36)
+        return btn
 
     # ── CENTER PANEL ─────────────────────────────────────
     def _build_center(self):
         p = QWidget(); p.setObjectName("centerPanel")
-        lay = QVBoxLayout(p); lay.setContentsMargins(0,0,0,0); lay.setSpacing(0)
+        lay = QVBoxLayout(p)
+        lay.setContentsMargins(30, 20, 30, 20); lay.setSpacing(14)
 
-        # Top bar
-        top = QWidget(); top.setObjectName("topBar"); top.setFixedHeight(58)
-        tl  = QHBoxLayout(top); tl.setContentsMargins(16,0,16,0)
-        sp  = QWidget(); sp.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-
-        tc = QVBoxLayout(); tc.setSpacing(2)
-        self._title = QLabel(UI_TITLE)
-        self._title.setObjectName("titleLabel")
-        self._title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._sub = QLabel(UI_SUBTITLE)
-        self._sub.setObjectName("subtitleLabel")
-        self._sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        tc.addWidget(self._title); tc.addWidget(self._sub)
-
-        rc = QVBoxLayout(); rc.setSpacing(1)
-        rc.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self._clock = QLabel("00:00:00")
-        self._clock.setObjectName("clockLabel")
-        self._clock.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self._date  = QLabel("Mon 01 Jun 2026")
-        self._date.setObjectName("dateLabel")
-        self._date.setAlignment(Qt.AlignmentFlag.AlignRight)
-        rc.addWidget(self._clock); rc.addWidget(self._date)
-
-        tl.addWidget(sp); tl.addLayout(tc); tl.addStretch(); tl.addLayout(rc)
-        lay.addWidget(top)
-
-        # Visualizer
         self._vis = CircularVisualizer()
         lay.addWidget(self._vis, 1, Qt.AlignmentFlag.AlignCenter)
 
-        # State label
-        self._cstate = QLabel("● STANDBY")
-        self._cstate.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._cstate.setStyleSheet("color:#2a4a5e;letter-spacing:4px;font-size:12px;font-weight:bold;font-family:'Courier New';")
-        lay.addWidget(self._cstate)
-
-        # Waveform
-        self._wave = WaveformBar()
-        lay.addWidget(self._wave)
-
-        # Bottom bar
-        bot = QWidget(); bot.setObjectName("bottomBar"); bot.setFixedHeight(30)
-        bl  = QHBoxLayout(bot); bl.setContentsMargins(16,0,16,0)
-        fl  = QLabel("Aadarsh Labs   ·   v2   ·   Remastered")
-        fl.setStyleSheet("color:#1a3a50;font-size:8px;letter-spacing:2px;")
-        fl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        bl.addWidget(fl)
-        lay.addWidget(bot)
-        return p
-
-    # ── RIGHT PANEL ──────────────────────────────────────
-    def _build_right(self):
-        p = QWidget(); p.setObjectName("rightPanel"); p.setFixedWidth(320)
-        lay = QVBoxLayout(p); lay.setContentsMargins(12,12,12,12); lay.setSpacing(8)
-
-        self._sec("▶ ACTIVITY LOG", lay)
-        self._log = QTextEdit()
-        self._log.setObjectName("logWidget")
-        self._log.setReadOnly(True)
-        self._log.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        lay.addWidget(self._log, 2)
-        self._div(lay)
-
-        self._sec("▶ FILE UPLOAD", lay)
-        self._upload_btn = QPushButton("⬆\n\nDrop file here  or  Click to Browse\n· Images · Video · Audio · PDF · Docs · Code ·")
-        self._upload_btn.setObjectName("uploadButton")
-        self._upload_btn.setFixedHeight(88)
-        self._upload_btn.clicked.connect(self._on_upload)
-        lay.addWidget(self._upload_btn)
-        self._upload_lbl = QLabel("No file loaded — drop or click above to upload")
-        self._upload_lbl.setStyleSheet("color:#2a4a5e;font-size:9px;letter-spacing:1px;")
-        self._upload_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.addWidget(self._upload_lbl)
-        self._div(lay)
-
-        self._sec("▶ COMMAND INPUT", lay)
-        row = QHBoxLayout(); row.setSpacing(6)
+        input_row = QHBoxLayout(); input_row.setSpacing(10)
         self._cmd = QLineEdit()
         self._cmd.setObjectName("commandInput")
         self._cmd.setPlaceholderText("Type a command or question...")
         self._cmd.returnPressed.connect(self._on_send)
-        row.addWidget(self._cmd)
-        sb = QPushButton("▶"); sb.setObjectName("sendButton")
-        sb.setFixedWidth(34); sb.clicked.connect(self._on_send)
-        row.addWidget(sb)
-        lay.addLayout(row)
+        input_row.addWidget(self._cmd, 1)
+        send_btn = QPushButton("➤")
+        send_btn.setObjectName("sendButton")
+        send_btn.setFixedSize(46, 46)
+        send_btn.clicked.connect(self._on_send)
+        input_row.addWidget(send_btn)
+        lay.addLayout(input_row)
 
-        # Mic + fullscreen
-        br = QHBoxLayout(); br.setSpacing(6)
+        qa_row = QHBoxLayout(); qa_row.setSpacing(10)
+        qa1 = QPushButton("📊  Summarize System")
+        qa2 = QPushButton("📂  Open Recent Files")
+        qa3 = QPushButton("🌐  Check Network")
+        qa4 = QPushButton("🩺  Run Diagnostics")
+        for b in (qa1, qa2, qa3, qa4):
+            b.setObjectName("quickAction"); b.setFixedHeight(40)
+            qa_row.addWidget(b)
+        qa1.clicked.connect(self._quick_summarize_system)
+        qa2.clicked.connect(self._on_upload)
+        qa3.clicked.connect(self._quick_check_network)
+        qa4.clicked.connect(self._quick_run_diagnostics)
+        lay.addLayout(qa_row)
+
+        self._wave = WaveformBar()
+        lay.addWidget(self._wave)
+
         self._mic_btn = QPushButton("🎤  MICROPHONE ACTIVE")
-        self._mic_btn.setFixedHeight(34)
-        self._mic_btn.setStyleSheet(
-            "QPushButton{background:#00ff8822;border:1px solid #00ff8866;"
-            "color:#00ff88;font-size:10px;font-weight:bold;padding:4px;}"
-            "QPushButton:hover{background:#00ff8844;border:1px solid #00ff88;}"
-        )
+        self._mic_btn.setObjectName("micPill")
+        self._mic_btn.setFixedHeight(38)
         self._mic_btn.clicked.connect(self._on_mute)
-        br.addWidget(self._mic_btn)
-
-        fs = QPushButton("⛶  FULLSCREEN  [F11]")
-        fs.setFixedHeight(34)
-        fs.setStyleSheet(
-            "QPushButton{background:transparent;border:1px solid #1a3a50;"
-            "color:#2a4a5e;font-size:9px;font-weight:bold;padding:4px;}"
-            "QPushButton:hover{border:1px solid #00c8ff55;color:#00c8ff;}"
-        )
-        fs.clicked.connect(self._toggle_fs)
-        br.addWidget(fs)
-        lay.addLayout(br)
+        mic_row = QHBoxLayout()
+        mic_row.addStretch(); mic_row.addWidget(self._mic_btn); mic_row.addStretch()
+        lay.addLayout(mic_row)
         return p
 
+    # ── RIGHT PANEL ──────────────────────────────────────
+    def _build_right(self):
+        p = QWidget(); p.setObjectName("rightPanel"); p.setFixedWidth(340)
+        lay = QVBoxLayout(p)
+        lay.setContentsMargins(18, 18, 18, 18); lay.setSpacing(10)
+
+        log_header = QHBoxLayout()
+        log_title = QLabel("▲  ACTIVITY LOG")
+        log_title.setStyleSheet("color:#c5dce8; font-size:11px; font-weight:700; letter-spacing:1px;")
+        clear_btn = QPushButton("CLEAR")
+        clear_btn.setObjectName("clearBtn")
+        clear_btn.setFixedSize(54, 22)
+        clear_btn.clicked.connect(self._clear_log)
+        log_header.addWidget(log_title); log_header.addStretch(); log_header.addWidget(clear_btn)
+        lay.addLayout(log_header)
+
+        self._log_scroll = QScrollArea()
+        self._log_scroll.setWidgetResizable(True)
+        self._log_container = QWidget()
+        self._log_lay = QVBoxLayout(self._log_container)
+        self._log_lay.setSpacing(2)
+        self._log_lay.addStretch()
+        self._log_scroll.setWidget(self._log_container)
+        lay.addWidget(self._log_scroll, 1)
+
+        view_full = QPushButton("VIEW FULL LOG  ⤴")
+        view_full.setObjectName("outlineBtn")
+        view_full.setFixedHeight(28)
+        view_full.clicked.connect(self._open_history)
+        lay.addWidget(view_full)
+        lay.addWidget(self._divider())
+
+        lay.addWidget(self._section_label("FILE UPLOAD"))
+        self._upload_btn = QPushButton(
+            "⬆\n\nDrop files here or click to browse\nImages · Video · Audio · PDF · Docs · Code"
+        )
+        self._upload_btn.setObjectName("uploadZone")
+        self._upload_btn.setFixedHeight(110)
+        self._upload_btn.clicked.connect(self._on_upload)
+        lay.addWidget(self._upload_btn)
+
+        self._upload_lbl = QLabel("No file loaded")
+        self._upload_lbl.setStyleSheet("color:#3c5a70; font-size:9px;")
+        self._upload_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(self._upload_lbl)
+        return p
+
+    # ── BOTTOM BAR ───────────────────────────────────────
+    def _build_bottombar(self):
+        bar = QWidget(); bar.setObjectName("bottomBar"); bar.setFixedHeight(34)
+        lay = QHBoxLayout(bar); lay.setContentsMargins(20, 0, 20, 0)
+
+        left = QHBoxLayout(); left.setSpacing(10)
+        v_lbl = QLabel("NOVA Core v5.3"); v_lbl.setStyleSheet("color:#3c5a70; font-size:9px;")
+        sec_lbl = QLabel("✓ Sec Cleared"); sec_lbl.setStyleSheet("color:#22c55e; font-size:9px; font-weight:700;")
+        left.addWidget(v_lbl); left.addWidget(sec_lbl)
+        lay.addLayout(left); lay.addStretch()
+
+        brand = QLabel("▲  AADARSH LABS")
+        brand.setStyleSheet("color:#3c5a70; font-size:9px; font-weight:700; letter-spacing:2px;")
+        lay.addWidget(brand); lay.addStretch()
+
+        secure_lbl = QLabel("●  SECURE  🔒")
+        secure_lbl.setStyleSheet("color:#22c55e; font-size:9px; font-weight:700;")
+        lay.addWidget(secure_lbl)
+        return bar
+
     # ── Helpers ──────────────────────────────────────────
-    def _sec(self, text, layout):
-        l = QLabel(text)
-        l.setStyleSheet("color:#2a4a5e;font-size:8px;letter-spacing:3px;padding:2px 0px;font-family:'Courier New';")
-        layout.addWidget(l)
+    def _section_label(self, text: str) -> QLabel:
+        lbl = QLabel(text); lbl.setObjectName("sectionHeader")
+        return lbl
 
-    def _div(self, layout):
+    def _divider(self) -> QFrame:
         f = QFrame(); f.setFrameShape(QFrame.Shape.HLine)
-        f.setStyleSheet("background:#1a3a50;max-height:1px;border:none;")
-        layout.addWidget(f)
+        f.setStyleSheet("background:#122638; max-height:1px; border:none;")
+        return f
 
-    def _eng_btn(self, label, engine_val):
-        btn = QPushButton(f"● {label}")
-        btn.setFixedHeight(26)
+    def _nav_item(self, text: str, badge: str = None) -> QPushButton:
+        btn = QPushButton()
+        btn.setObjectName("navItem")
+        btn.setFixedHeight(34)
+        row = QHBoxLayout(btn)
+        row.setContentsMargins(10, 0, 10, 0)
+        lbl = QLabel(text)
+        lbl.setStyleSheet("font-size:11px; font-weight:600; background:transparent; color:#5a7a90;")
+        row.addWidget(lbl); row.addStretch()
+        btn._badge_lbl = None
+        if badge is not None:
+            badge_lbl = QLabel(badge)
+            badge_lbl.setFixedSize(22, 16)
+            badge_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            badge_lbl.setStyleSheet(
+                "background:#00d4ff22; border:1px solid #00d4ff55; border-radius:8px;"
+                "color:#00d4ff; font-size:8px; font-weight:700;"
+            )
+            row.addWidget(badge_lbl)
+            btn._badge_lbl = badge_lbl
+        return btn
+
+    def _eng_btn(self, label: str, engine_val: str) -> QPushButton:
+        btn = QPushButton(f"○  {label}")
+        btn.setFixedHeight(32)
         btn.clicked.connect(lambda _, e=engine_val: self._on_engine(e))
         return btn
 
     def _refresh_engine_btns(self):
         eng = get_engine()
-        cfg = {
-            Engine.GEMINI: ("#4285f4", self._btn_gemini),
-            Engine.GROQ:   ("#ff6b35", self._btn_groq),
-            Engine.OLLAMA: ("#00ff88", self._btn_ollama),
-        }
-        for e, (c, btn) in cfg.items():
+        mapping = {Engine.GEMINI: self._btn_gemini, Engine.GROQ: self._btn_groq, Engine.OLLAMA: self._btn_ollama}
+        for e, btn in mapping.items():
+            label = btn.text().split("  ", 1)[-1]
             if e == eng:
-                btn.setStyleSheet(
-                    f"QPushButton{{background:{c}15;border:1px solid {c}99;"
-                    f"color:{c};font-size:9px;font-weight:bold;padding:3px 8px;letter-spacing:1px;}}"
-                    f"QPushButton:hover{{background:{c}30;}}"
-                )
+                btn.setObjectName("engineRowActive"); btn.setText(f"●  {label}")
             else:
-                btn.setStyleSheet(
-                    "QPushButton{background:transparent;border:1px solid #1a3a50;"
-                    "color:#2a4a5e;font-size:9px;font-weight:bold;padding:3px 8px;letter-spacing:1px;}"
-                    "QPushButton:hover{border:1px solid #00c8ff55;color:#00c8ff;}"
-                )
+                btn.setObjectName("engineRow"); btn.setText(f"○  {label}")
+            btn.style().unpolish(btn); btn.style().polish(btn)
 
     def _register_voice_callbacks(self):
         voice_on("state_change", lambda s: self.sig_state.emit(s))
@@ -320,95 +357,106 @@ class NovaWindow(QMainWindow):
     def _tick_clock(self):
         n = datetime.datetime.now()
         self._clock.setText(n.strftime("%H:%M:%S"))
-        self._date.setText(n.strftime("%a %d %b %Y"))
+        self._date.setText(n.strftime("%a, %d %b %Y"))
+        self._update_greeting()
 
-    # ── Log ──────────────────────────────────────────────
+    def _update_greeting(self):
+        hour = datetime.datetime.now().hour
+        if hour < 12:   greet = "Good morning, Boss!"
+        elif hour < 17: greet = "Good afternoon, Boss!"
+        else:           greet = "Good evening, Boss!"
+        self._greeting_lbl.setText(greet)
+
+    # ── Activity log ──────────────────────────────────────
     def _append_log(self, who, text):
-        colors   = {"user":"#f0a500","nova":"#00c8ff","sora":"#c084fc","sys":"#2a4a5e"}
-        prefixes = {"user":"You    ▶","nova":"NOVA   ▶","sora":"SORA   ▶","sys":""}
-        color    = colors.get(who, "#a0cfe0")
-        prefix   = prefixes.get(who, "")
-        msg      = f"{prefix}  {text}" if prefix else text
-        cur = self._log.textCursor()
-        cur.movePosition(QTextCursor.MoveOperation.End)
-        fmt = cur.charFormat(); fmt.setForeground(QColor(color))
-        cur.setCharFormat(fmt); cur.insertText(msg + "\n")
-        self._log.setTextCursor(cur); self._log.ensureCursorVisible()
+        entry = LogEntry(who, text)
+        self._log_lay.insertWidget(self._log_lay.count() - 1, entry)
+        self._log_count += 1
+        if self._log_badge:
+            self._log_badge.setText(str(self._log_count))
+        QTimer.singleShot(10, lambda: self._log_scroll.verticalScrollBar().setValue(
+            self._log_scroll.verticalScrollBar().maximum()
+        ))
+        while self._log_lay.count() > 101:
+            item = self._log_lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+    def _clear_log(self):
+        while self._log_lay.count() > 1:
+            item = self._log_lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._log_count = 0
+        if self._log_badge:
+            self._log_badge.setText("0")
 
     # ── State ─────────────────────────────────────────────
     def _on_state(self, state):
-        cfg = {
-            VoiceState.LISTENING: ("● LISTENING", "#00c8ff"),
-            VoiceState.SPEAKING:  ("● SPEAKING",  "#00ff88"),
-            VoiceState.THINKING:  ("● THINKING",  "#f0a500"),
-            VoiceState.IDLE:      ("● STANDBY",   "#2a4a5e"),
+        status_map = {
+            VoiceState.LISTENING: ("LISTENING", "NOVA is listening and ready.", "#00d4ff"),
+            VoiceState.SPEAKING:  ("SPEAKING",  "NOVA is responding.",          "#22c55e"),
+            VoiceState.THINKING:  ("THINKING",  "NOVA is processing...",        "#fbbf24"),
+            VoiceState.IDLE:      ("STANDBY",   "NOVA is on standby.",          "#3c5a70"),
+            VoiceState.SLEEPING:  ("SLEEPING",  "Say 'Nova' to wake up.",       "#fbbf24"),
         }
-        lbl, col = cfg.get(state, ("● STANDBY","#2a4a5e"))
-        ss = f"color:{col};font-size:11px;font-weight:bold;letter-spacing:2px;font-family:'Courier New';"
-        self._state_lbl.setText(lbl); self._state_lbl.setStyleSheet(ss)
-        self._cstate.setText(lbl)
-        self._cstate.setStyleSheet(f"color:{col};letter-spacing:4px;font-size:12px;font-weight:bold;font-family:'Courier New';")
+        label, status_text, color = status_map.get(state, ("STANDBY", "NOVA is on standby.", "#3c5a70"))
+        self._state_lbl.setText(label)
+        self._state_lbl.setStyleSheet(f"color:{color}; font-size:16px; font-weight:800; letter-spacing:1px;")
+        self._status_text.setText(status_text)
+        self._status_dot2.setStyleSheet(f"color:{color}; font-size:8px;")
+
         asst = get_assistant()
         self._vis.set_state(state);  self._vis.set_assistant(asst)
         self._wave.set_state(state); self._wave.set_assistant(asst)
-        # Update assistant label
-        al  = "● NOVA-M" if asst == "nova" else "● SORA-F"
-        ac  = "#00c8ff"  if asst == "nova" else "#c084fc"
-        self._asst_lbl.setText(al)
-        self._asst_lbl.setStyleSheet(f"color:{ac};font-size:13px;font-weight:bold;letter-spacing:2px;font-family:'Courier New';")
-        # Update sora button
-        if asst == "nova":
-            self._sora_btn.setText("⟳  SWITCH TO SORA")
-            self._sora_btn.setStyleSheet(
-                "QPushButton{background:#c084fc22;border:1px solid #c084fc88;"
-                "color:#c084fc;font-size:9px;font-weight:bold;letter-spacing:1px;padding:4px;}"
-                "QPushButton:hover{background:#c084fc44;border:1px solid #c084fc;}"
-            )
-        else:
-            self._sora_btn.setText("⟳  SWITCH TO NOVA")
-            self._sora_btn.setStyleSheet(
-                "QPushButton{background:#00c8ff22;border:1px solid #00c8ff88;"
-                "color:#00c8ff;font-size:9px;font-weight:bold;letter-spacing:1px;padding:4px;}"
-                "QPushButton:hover{background:#00c8ff44;border:1px solid #00c8ff;}"
-            )
+        self._state_sub.setText("NOVA-M ACTIVE" if asst == "nova" else "SORA-F ACTIVE")
+        self._sora_btn.setText("⟳  SWITCH TO NOVA" if asst == "sora" else "⟳  SWITCH TO SORA")
 
     # ── Engine ────────────────────────────────────────────
     def _on_engine(self, engine):
         set_engine(engine)
         self._refresh_engine_btns()
         names = {Engine.GEMINI:"GEMINI", Engine.GROQ:"GROQ", Engine.OLLAMA:"OLLAMA"}
-        self._append_log("sys", f"[ Engine → {names.get(engine, engine)} ]")
+        self._append_log("sys", f"Engine switched to {names.get(engine, engine)}.")
 
     # ── Toggle assistant ──────────────────────────────────
     def _toggle_assistant(self):
-        current = get_assistant()
-        if current == "nova":
+        if get_assistant() == "nova":
             set_assistant("sora")
-            self._append_log("sys", "[ Switched to SORA ]")
+            self._append_log("sys", "Switched to SORA.")
             speak_sora("SORA online.")
         else:
             set_assistant("nova")
-            self._append_log("sys", "[ Switched to NOVA ]")
+            self._append_log("sys", "Switched to NOVA.")
             speak_nova("NOVA online.")
         self._on_state(VoiceState.IDLE)
 
     # ── Send text ─────────────────────────────────────────
     def _on_send(self):
         text = self._cmd.text().strip()
-        if not text: return
+        if not text:
+            return
         self._cmd.clear()
         self._append_log("user", text)
+
         if self._uploaded_file:
             text = f"[File: {Path(self._uploaded_file).name}] {text}"
-        asst   = get_assistant()
-        worker = CommandWorker(asst, text)
-        thread = QThread()
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.finished.connect(thread.quit)
-        worker.finished.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-        thread.start(); self._threads.append(thread)
+
+        asst = get_assistant()
+
+        def _run():
+            from core.command_router import route
+            from core.logger import log
+            try:
+                route(asst, text)
+            except SystemExit:
+                pass
+            except Exception as e:
+                log.error(f"[TextCommand] Route failed for '{text[:40]}': {e}", exc_info=True)
+                from core.voice import speak
+                speak("Something went wrong. Please try again.")
+
+        threading.Thread(target=_run, daemon=True, name="TextCmd").start()
 
     # ── Upload ────────────────────────────────────────────
     def _on_upload(self):
@@ -419,66 +467,85 @@ class NovaWindow(QMainWindow):
             "Text (*.txt *.md *.csv *.json)"
         )
         if path:
-            self._uploaded_file = path
-            fname = Path(path).name
-            self._upload_lbl.setText(f"✓ {fname}")
-            self._upload_lbl.setStyleSheet("color:#00c8ff;font-size:9px;")
-            self._append_log("sys", f"[ File loaded: {fname} ]")
-            # Trigger immediate file analysis in background
-            self._trigger_file_analysis(path)
+            self._set_uploaded(path)
+
+    def _set_uploaded(self, path: str) -> None:
+        self._uploaded_file = path
+        fname = Path(path).name
+        self._upload_lbl.setText(f"✓ {fname}")
+        self._upload_lbl.setStyleSheet("color:#00d4ff; font-size:9px;")
+        self._append_log("sys", f"File loaded: {fname}")
+        self._trigger_file_analysis(path)
 
     def _trigger_file_analysis(self, filepath: str) -> None:
-        """Analyse uploaded file in background — NOVA speaks immediately."""
-        import threading
         from actions.file_analyzer import load_and_announce
-        thread = threading.Thread(
-            target = load_and_announce,
-            args   = (filepath,),
-            daemon = True,
-            name   = "FileAnalyzer"
+        threading.Thread(target=load_and_announce, args=(filepath,), daemon=True, name="FileAnalyzer").start()
+
+    # ── Quick actions (run off-thread to avoid blocking the UI) ──
+    def _quick_summarize_system(self):
+        threading.Thread(target=self._do_summarize_system, daemon=True).start()
+
+    def _do_summarize_system(self):
+        import psutil
+        cpu = psutil.cpu_percent(interval=0.3)
+        mem = psutil.virtual_memory().percent
+        speak(f"System summary: CPU at {int(cpu)} percent, memory at {int(mem)} percent. All systems nominal.")
+
+    def _quick_check_network(self):
+        threading.Thread(target=self._do_check_network, daemon=True).start()
+
+    def _do_check_network(self):
+        import socket
+        try:
+            socket.create_connection(("8.8.8.8", 53), timeout=2)
+            speak("Network connection is stable and active.")
+        except OSError:
+            speak("I couldn't reach the internet. Please check your network connection.")
+
+    def _quick_run_diagnostics(self):
+        threading.Thread(target=self._do_run_diagnostics, daemon=True).start()
+
+    def _do_run_diagnostics(self):
+        import psutil
+        cpu  = psutil.cpu_percent(interval=0.3)
+        mem  = psutil.virtual_memory().percent
+        disk = psutil.disk_usage("C:\\").percent
+        bat  = psutil.sensors_battery()
+        bat_txt = f", battery at {int(bat.percent)} percent" if bat else ""
+        speak(
+            f"Diagnostics complete. CPU {int(cpu)} percent, memory {int(mem)} percent, "
+            f"disk {int(disk)} percent used{bat_txt}. No issues detected."
         )
-        thread.start()
 
     # ── Mute ──────────────────────────────────────────────
     def _on_mute(self):
         from core.voice import stop_audio_loop, audio_loop
-        import threading
         self._muted = not self._muted
         if self._muted:
             stop_audio_loop()
             self._mic_btn.setText("🔇  MICROPHONE MUTED")
-            self._mic_btn.setStyleSheet(
-                "QPushButton{background:#ff335522;border:1px solid #ff335566;"
-                "color:#ff3355;font-size:10px;font-weight:bold;padding:4px;}"
-            )
-            self._append_log("sys","[ Microphone muted ]")
+            self._mic_btn.setObjectName("micPillMuted")
+            self._append_log("sys", "Microphone muted.")
         else:
             threading.Thread(target=audio_loop, daemon=True).start()
             self._mic_btn.setText("🎤  MICROPHONE ACTIVE")
-            self._mic_btn.setStyleSheet(
-                "QPushButton{background:#00ff8822;border:1px solid #00ff8866;"
-                "color:#00ff88;font-size:10px;font-weight:bold;padding:4px;}"
-                "QPushButton:hover{background:#00ff8844;}"
-            )
-            self._append_log("sys","[ Microphone active ]")
+            self._mic_btn.setObjectName("micPill")
+            self._append_log("sys", "Microphone active.")
+        self._mic_btn.style().unpolish(self._mic_btn)
+        self._mic_btn.style().polish(self._mic_btn)
 
     # ── Fullscreen ────────────────────────────────────────
     def _toggle_fs(self):
         self.showNormal() if self.isFullScreen() else self.showFullScreen()
-        
-    def closeEvent(self, event) -> None:
-        """Minimise to tray instead of quitting when window is closed."""
-        if hasattr(self, "_tray") and self._tray:
-            event.ignore()
-            self.hide()
-            self._tray.notify(
-                "N.O.V.A",
-                "Running in the background.\n"
-                "Double-click the tray icon to restore."
-            )
-        else:
-            event.accept()
 
+    # ── Panels ────────────────────────────────────────────
+    def _open_settings(self) -> None:
+        from ui.settings_panel import SettingsPanel
+        SettingsPanel(self).exec()
+
+    def _open_history(self) -> None:
+        from ui.history_search import HistorySearchPanel
+        HistorySearchPanel(self).exec()
 
     # ── Keys ──────────────────────────────────────────────
     def keyPressEvent(self, event):
@@ -486,6 +553,15 @@ class NovaWindow(QMainWindow):
         elif event.key() == Qt.Key.Key_F4: self._on_mute()
         elif event.key() == Qt.Key.Key_Escape and self.isFullScreen(): self.showNormal()
         else: super().keyPressEvent(event)
+
+    # ── Close → minimise to tray ──────────────────────────
+    def closeEvent(self, event) -> None:
+        if self._tray:
+            event.ignore()
+            self.hide()
+            self._tray.notify("N.O.V.A", "Running in the background.\nDouble-click the tray icon to restore.")
+        else:
+            event.accept()
 
     # ── Drag & Drop ───────────────────────────────────────
     def showEvent(self, e):
@@ -497,20 +573,46 @@ class NovaWindow(QMainWindow):
     def dropEvent(self, e):
         urls = e.mimeData().urls()
         if urls:
-            path  = urls[0].toLocalFile()
-            self._uploaded_file = path
-            fname = Path(path).name
-            self._upload_lbl.setText(f"✓ {fname}")
-            self._upload_lbl.setStyleSheet("color:#00c8ff;font-size:9px;")
-            self._append_log("sys", f"[ File loaded: {fname} ]")
-            self._trigger_file_analysis(path)
+            self._set_uploaded(urls[0].toLocalFile())
 
-    def _open_settings(self) -> None:
-        from ui.settings_panel import SettingsPanel
-        panel = SettingsPanel(self)
-        panel.exec()
+    def _register_voice_callbacks(self):
+        voice_on("state_change", lambda s: self.sig_state.emit(s))
+        voice_on("transcript",   lambda d: self.sig_transcript.emit(d))
+        voice_on("response",     lambda d: self.sig_response.emit(d))
+        voice_on("nova_state",   lambda s: self._on_nova_mode_change(s))
+    
+    # REPLACE WITH:
+    def _on_nova_mode_change(self, mode: str) -> None:
+        """
+        Called when NOVA transitions between sleep and active modes.
+        Runs on Qt main thread via sig_nova_mode signal — no QObject crash.
+        """
+        from core.voice import NovaState, VoiceState
+        if mode == NovaState.SLEEP:
+            self.sig_state.emit(VoiceState.SLEEPING)
+            self._state_sub.setText("NOVA-M ACTIVE")
+            self._append_log("sys", "NOVA entering sleep mode.")
+        else:
+            self.sig_state.emit(VoiceState.LISTENING)
+            self._state_sub.setText("NOVA-M ACTIVE")
+            self._append_log("sys", "NOVA activated.")
 
-    def _open_history(self) -> None:
-        from ui.history_search import HistorySearchPanel
-        panel = HistorySearchPanel(self)
-        panel.exec()
+    def _update_countdown(self) -> None:
+        """Update the sub-label with remaining active time."""
+        from core.voice import _active_until, NovaState, _nova_state
+        if _nova_state != NovaState.ACTIVE:
+            if hasattr(self, "_countdown_timer"):
+                self._countdown_timer.stop()
+            return
+        remaining = max(0, int(_active_until - __import__("time").time()))
+        mins      = remaining // 60
+        secs      = remaining % 60
+        self._state_sub.setText(f"ACTIVE — {mins}:{secs:02d} remaining")
+
+    def _register_voice_callbacks(self):
+        voice_on("state_change", lambda s: self.sig_state.emit(s))
+        voice_on("transcript",   lambda d: self.sig_transcript.emit(d))
+        voice_on("response",     lambda d: self.sig_response.emit(d))
+        # Route through pyqtSignal — ensures _on_nova_mode_change runs on
+        # the Qt main thread, not the audio_loop thread (fixes QObject crash)
+        voice_on("nova_state",   lambda s: self.sig_nova_mode.emit(s))

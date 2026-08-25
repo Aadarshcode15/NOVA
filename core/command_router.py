@@ -64,6 +64,10 @@ def _email():
     from actions.email import handle_email
     return handle_email
 
+def _journal():
+    from actions.journal import handle_journal
+    return handle_journal
+
 def _browser():
     from actions.browser import handle_browser
     return handle_browser
@@ -71,6 +75,14 @@ def _browser():
 def _file_analyzer():
     from actions.file_analyzer import handle_file_command
     return handle_file_command
+
+def _clipboard():
+    from actions.clipboard_assistant import handle_clipboard
+    return handle_clipboard
+
+def _macros():
+    from actions.macros import handle_macro
+    return handle_macro
 
 # ── Engine switch commands ─────────────────────────────────
 def _handle_engine_switch(command: str) -> bool:
@@ -139,6 +151,27 @@ def _handle_settings(command: str) -> bool:
     speak("Click the Settings button in the left panel.")
     return True
 
+def _handle_perf_stats(command: str) -> bool:
+    triggers = (
+        "performance stats", "how fast are you", "show me your speed",
+        "response time", "show performance", "perf stats",
+        "how is your performance",
+    )
+    if not any(t in command for t in triggers):
+        return False
+    from core.perf import get_session_stats
+    stats = get_session_stats()
+    if not stats or "total" not in stats:
+        speak("I don't have enough data yet. Try a few more commands first.")
+        return True
+    total = stats["total"]
+    speak(
+        f"Average response time is {total['avg']:.0f} milliseconds, "
+        f"ranging from {total['min']:.0f} to {total['max']:.0f} milliseconds, "
+        f"across {total['count']} commands this session."
+    )
+    return True
+
 def _handle_history_search(command: str) -> bool:
     c = command.lower()
     triggers = (
@@ -176,29 +209,49 @@ def _handle_history_search(command: str) -> bool:
     return True
 
 # ── Main Router ───────────────────────────────────────────
+# REPLACE with (adds macro recording intercept + new handlers):
 def route(assistant: str, command: str) -> None:
-    """
-    Intent-first routing:
-      1. Classify command → category + confidence
-      2. High confidence  → try target handler directly
-      3. Handler returned False OR low confidence → full linear check
-      4. Nothing matched  → AI fallback
-    """
     from core.intent import classify
     from core.logger import log
+    from actions.macros import is_recording, capture_command
 
     c = command.lower().strip()
     log.info(f"[Router] {assistant.upper()} → {c}")
 
     try:
-        # ── Fast exits — no intent needed ──
-        if _handle_exit(c):          return
-        if _handle_engine_switch(c): return
-        if _handle_time_date(c):     return
-        if _handle_briefing(c):      return
-        if _handle_settings(c):      return
+        # ADD ABOVE the macro intercept:
+        # ── VOICE NOTE INTERCEPT ────────────────────────────────
+        # If journal is awaiting a note, capture next spoken input
+        from actions.journal import is_awaiting_note, capture_and_save
+        if is_awaiting_note():
+            capture_and_save(command)
+            return
+        
+        # ── MACRO RECORDING INTERCEPT ───────────────────────────
+        # If recording mode is active, capture this command
+        # instead of executing it — EXCEPT stop/save commands
+        if is_recording():
+            from actions.macros import _RECORD_STOP
+            if any(t in c for t in _RECORD_STOP):
+                _macros()(command)   # handle stop recording
+                return
+            # Capture the command and return — don't route it
+            capture_command(command)
+            return
+
+        # ── Fast exits — no intent needed ──────────────────────
+        if _handle_exit(c):                  return
+        if _handle_engine_switch(c):         return
+        if _handle_time_date(c):             return
+        if _handle_briefing(c):              return
+        if _handle_settings(c):              return
         if _handle_history_search(command):  return
-        if _file_analyzer()(command): return
+        if _handle_perf_stats(c):            return
+        if _clipboard()(command):            return
+        if _file_analyzer()(command):        return
+
+        # ── Macro / Routine ─────────────────────────────────────
+        if _macros()(command):               return
 
         # ── Classify intent ──
         intent     = classify(command)
@@ -220,14 +273,17 @@ def route(assistant: str, command: str) -> None:
                 "todo":     lambda: _todo()(c),
                 "whatsapp": lambda: _whatsapp()(command),
                 "system":   lambda: _sys()(c),
-                "youtube":  lambda: _youtube()(c),
+                "youtube":  lambda: _youtube()(command),
                 "files":    lambda: _files()(command),
                 "code":     lambda: _code()(command),
                 "desktop":  lambda: _desktop()(c),
                 "search":   lambda: _search()(c),
                 "memory":   lambda: _memory()(command),
                 "vision":   lambda: _vision()(c),
-                "browser":  lambda: _browser()(command),   
+                "browser":  lambda: _browser()(command), 
+                "clipboard": lambda: _clipboard()(command),
+                "macro":     lambda: _macros()(command),  
+                "journal":  lambda: _journal()(command),
             }
 
             handler = _intent_map.get(category)
@@ -238,19 +294,21 @@ def route(assistant: str, command: str) -> None:
         # Proper-noun handlers receive original command
         if _memory()(command):       return
         if _calendar()(command):     return
+        if _macros()(command):       return
         if _email()(command):        return
         if _sys()(c):                return
         if _spotify()(c):            return
         if _whatsapp()(command):     return
         if _reminder()(command):     return
+        if _journal()(command):      return
         if _todo()(c):               return
 
         handle_weather, handle_news = _weather_news()
         if handle_weather(c):        return
         if handle_news(c):           return
         if _vision()(c):             return
-        if _youtube()(c):            return
-        if _code()(command):         return   # before files — "create X" is code, not file op
+        if _youtube()(command):      return  
+        if _code()(command):         return   
         if _files()(command):        return
         if _desktop()(c):            return
         if _browser()(command):      return
@@ -264,5 +322,9 @@ def route(assistant: str, command: str) -> None:
         raise
     except Exception as e:
         import traceback
-        log.error(f"[Router Error] {e}\n{traceback.format_exc()}")
-        speak("Something went wrong. Please try again.")
+        tb = traceback.format_exc()
+        log.error(f"[Router Error] '{command[:50]}'\n{tb}")
+        try:
+            speak("Something went wrong. Please try again.")
+        except Exception:
+            pass   # if even speak() fails, don't crash

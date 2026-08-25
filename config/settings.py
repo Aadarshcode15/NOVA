@@ -27,19 +27,27 @@ SPOTIFY_CLIENT_ID    = os.getenv("SPOTIFY_CLIENT_ID", "")
 SPOTIFY_CLIENT_SECRET= os.getenv("SPOTIFY_CLIENT_SECRET", "")
 SPOTIFY_REDIRECT     = "http://127.0.0.1:8888/callback"
 
+# ── Microphone device override ──────────────────────────────
+# Leave blank to use system default. If diagnostics show NOVA is
+# listening to the wrong device, set this to the correct index
+# (shown in the startup log under "Available input devices").
+MIC_DEVICE_INDEX = os.getenv("MIC_DEVICE_INDEX", "").strip()
+MIC_DEVICE_INDEX = int(MIC_DEVICE_INDEX) if MIC_DEVICE_INDEX.isdigit() else None
+
 # ── Assistant Identity ─────────────────────────────────────
 NOVA_NAME        = "Nova"
 SORA_NAME        = "Sora"
 WAKE_NOVA        = "nova"
 WAKE_SORA        = "sora"
 
-# Gemini native voice names
-NOVA_VOICE       = "Charon"    # Deep, British male
-SORA_VOICE       = "Aoede"     # Warm, American female
-
-# Edge TTS fallback voices
-NOVA_VOICE_EDGE  = "en-GB-RyanNeural"
-SORA_VOICE_EDGE  = "en-US-AriaNeural"
+# Edge TTS fallback voices — English
+NOVA_VOICE_EDGE     = "en-GB-RyanNeural"
+SORA_VOICE_EDGE     = "en-US-AriaNeural"
+# Edge TTS fallback voices — Hindi / Marathi (third-tier fallback only)
+NOVA_VOICE_EDGE_HI  = "hi-IN-MadhurNeural"
+SORA_VOICE_EDGE_HI  = "hi-IN-SwaraNeural"
+NOVA_VOICE_EDGE_MR  = "mr-IN-ManoharNeural"
+SORA_VOICE_EDGE_MR  = "mr-IN-AarohiNeural"
 
 # ── AI Engine ──────────────────────────────────────────────
 class Engine:
@@ -47,9 +55,10 @@ class Engine:
     GROQ   = "groq"
     OLLAMA = "ollama"
 
-GEMINI_MODEL  = "gemini-2.5-flash"
-GROQ_MODEL    = "llama-3.1-8b-instant"
-GROQ_VISION_MODEL  = "meta-llama/llama-4-scout-17b-16e-instruct"  # free, fast vision
+# REPLACE:
+GEMINI_MODEL  = "gemini-2.5-flash"      # AI reasoning only — TTS removed
+GROQ_MODEL    = "openai/gpt-oss-20b"
+GROQ_VISION_MODEL  = "qwen/qwen3.6-27b"  # free, fast vision
 OLLAMA_MODEL  = "gemma4:e4b"
 OLLAMA_HOST   = "http://localhost:11434"
 VISION_MODEL  = "gemini-2.5-flash"   # fallback for vision tasks if GROQ model fails
@@ -64,9 +73,10 @@ SILENCE_TIMEOUT   = 2.0       # seconds of silence before processing
 MAX_RECORD_SECS   = 15        # max recording length
 
 # ── Features ───────────────────────────────────────────────
-MAX_NEWS          = 5
-FACE_CHECK_INTERVAL = 8     # kept for future use
-MORNING_BRIEFING_TIME = os.getenv("MORNING_BRIEFING_TIME", "08:00")  # 24h format   
+MAX_NEWS              = 5
+FACE_CHECK_INTERVAL   = 8
+MORNING_BRIEFING_TIME = os.getenv("MORNING_BRIEFING_TIME", "08:00")
+ACTIVE_DURATION_SECS  = int(os.getenv("NOVA_ACTIVE_SECS", "300"))  # 5 minutes default 
 
 # ── UI ─────────────────────────────────────────────────────
 UI_WIDTH          = 1400
@@ -74,19 +84,19 @@ UI_HEIGHT         = 860
 UI_TITLE          = "N.O.V.A"
 UI_SUBTITLE       = "Neural Operative Virtual Assistant"
 
-# Colors
-C_BG              = "#080d14"
-C_PANEL           = "#0a1220"
-C_NOVA            = "#00c8ff"    # cyan — NOVA-M
+# Colors — Professional Tech Dashboard Theme
+C_BG              = "#04070d"
+C_PANEL           = "#070c16"
+C_NOVA            = "#00d4ff"    # cyan — NOVA-M
 C_SORA            = "#c084fc"    # purple — SORA-F
-C_GOLD            = "#f0a500"
-C_GREEN           = "#00ff88"
-C_ORANGE          = "#ff6b35"
-C_RED             = "#ff3355"
-C_DIM             = "#0d2535"
-C_DIM_TXT         = "#2a4a5e"
-C_TEXT            = "#a0cfe0"
-C_BORDER          = "#1a3a50"
+C_GOLD            = "#fbbf24"
+C_GREEN           = "#22c55e"
+C_ORANGE          = "#fb923c"
+C_RED             = "#f43f5e"
+C_DIM             = "#0d1f2e"
+C_DIM_TXT         = "#3c5a70"
+C_TEXT            = "#c5dce8"
+C_BORDER          = "#16334a"
 
 # Engine indicator colors
 ENGINE_COLORS = {

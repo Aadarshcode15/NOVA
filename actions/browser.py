@@ -92,7 +92,7 @@ def _get_page():
 # Common search box patterns — tried in order, works across most sites
 _SEARCH_SELECTORS = [
     'input[name="q"]',
-    '#twotabsearchtextbox',          # Amazon
+    '#twotabsearchtextbox',          
     'input[type="search"]',
     '[role="searchbox"]',
     'input[placeholder*="Search" i]',

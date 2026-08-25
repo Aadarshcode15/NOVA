@@ -1,12 +1,12 @@
 # actions/system_control.py
 import os
 import re
+import time
 import subprocess
 import datetime
 import psutil
 import pyautogui
 import pyperclip
-import time
 import screen_brightness_control as sbc
 from core.voice import speak
 from core.logger import log
@@ -102,7 +102,43 @@ def _open_app(app_name: str, exe: str) -> None:
 
 
 # ── Volume helpers ─────────────────────────────────────────
+def _extract_level(command: str) -> int | None:
+    """
+    Extract a 0-100 level from a command. Handles:
+      - digits: "50", "set volume to 75"
+      - percent sign: "70%"
+      - spelled out: "fifty", "seventy five"  (common when STT writes words)
+    Returns None if nothing found.
+    """
+    c = command.lower().replace("%", "")
+
+    digit_match = re.search(r'\b(\d{1,3})\b', c)
+    if digit_match:
+        return max(0, min(100, int(digit_match.group(1))))
+
+    try:
+        from word2number import w2n
+        words = c.split()
+        for size in (3, 2, 1):
+            for i in range(len(words) - size + 1):
+                phrase = " ".join(words[i:i + size])
+                try:
+                    val = w2n.word_to_num(phrase)
+                    return max(0, min(100, int(val)))
+                except ValueError:
+                    continue
+    except ImportError:
+        log.warning("[System] word2number not installed — spelled-out numbers won't parse")
+
+    return None
+
 def _set_volume_exact(level: int) -> None:
+    try:
+        import comtypes
+        comtypes.CoInitialize()   # required per-thread for pycaw — fixes silent COM failures
+    except Exception:
+        pass   # already initialized on this thread
+
     try:
         from ctypes import cast, POINTER
         from comtypes import CLSCTX_ALL
@@ -111,8 +147,11 @@ def _set_volume_exact(level: int) -> None:
         interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
         volume    = cast(interface, POINTER(IAudioEndpointVolume))
         volume.SetMasterVolumeLevelScalar(level / 100, None)
-    except Exception:
+        log.info(f"[Volume] Set to {level}% via pycaw")
+    except Exception as e:
+        log.warning(f"[Volume] pycaw failed ({e}), using keypress fallback")
         pyautogui.press("volumedown", presses=50)
+        time.sleep(0.3)
         if int(level / 2) > 0:
             pyautogui.press("volumeup", presses=int(level / 2))
 
@@ -131,12 +170,13 @@ def handle_system(command: str) -> bool:
             pyautogui.press("volumemute")
             speak("Muted.")
             return True
-        for w in c.split():
-            if w.isdigit():
-                level = max(0, min(100, int(w)))
-                _set_volume_exact(level)
-                speak(f"Volume set to {level}.")
-                return True
+
+        level = _extract_level(c)
+        if level is not None:
+            _set_volume_exact(level)
+            speak(f"Volume set to {level}.")
+            return True
+
         if any(k in c for k in ("up", "increase", "raise", "louder")):
             pyautogui.press("volumeup", presses=5)
             speak("Volume up.")
@@ -146,16 +186,21 @@ def handle_system(command: str) -> bool:
             speak("Volume down.")
             return True
 
+        speak("Did you want me to turn the volume up, down, or set it to a specific level?")
+        return True
+
     # ── Brightness ──
     if "brightness" in c:
         try:
-            cur = sbc.get_brightness(display=0)[0]
-            for w in c.split():
-                if w.isdigit():
-                    lvl = max(0, min(100, int(w)))
-                    sbc.set_brightness(lvl, display=0)
-                    speak(f"Brightness set to {lvl}.")
-                    return True
+            cur = sbc.get_brightness(display=0)
+            cur = cur[0] if isinstance(cur, list) else cur   # handles version differences
+
+            level = _extract_level(c)
+            if level is not None:
+                sbc.set_brightness(level, display=0)
+                speak(f"Brightness set to {level}.")
+                return True
+
             if any(k in c for k in ("up", "increase", "raise")):
                 sbc.set_brightness(min(100, cur + 10), display=0)
                 speak("Brightness increased.")
@@ -164,9 +209,12 @@ def handle_system(command: str) -> bool:
                 sbc.set_brightness(max(0, cur - 10), display=0)
                 speak("Brightness decreased.")
                 return True
+
+            speak("Did you want me to turn the brightness up, down, or set it to a specific level?")
+            return True
         except Exception as e:
             log.error(f"[Brightness Error] {e}")
-            speak("Couldn't control brightness.")
+            speak("Couldn't control brightness. Your display may not support software brightness control.")
         return True
 
     # ── Screenshot ──

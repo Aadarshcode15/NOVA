@@ -1,19 +1,15 @@
 # ui/settings_panel.py
 import os
-import subprocess
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
     QWidget, QLabel, QComboBox, QLineEdit, QCheckBox,
     QPushButton, QSlider, QFrame, QSizePolicy, QTimeEdit,
-    QScrollArea, QGridLayout
 )
-from PyQt6.QtCore  import Qt, QTime
-from PyQt6.QtGui   import QFont, QColor
+from PyQt6.QtCore import Qt, QTime
 from config.settings import BASE_DIR
 
 
-# ── Stylesheet matching NOVA dark theme ───────────────────
 _STYLE = """
 QDialog {
     background-color: #08111c;
@@ -23,12 +19,21 @@ QDialog {
 QTabWidget::pane {
     border: 1px solid #1a3a50;
     background: #08111c;
+    top: -1px;
+}
+QTabWidget::tab-bar {
+    alignment: left;
+}
+QTabBar {
+    background: #050a10;
 }
 QTabBar::tab {
     background: #050a10;
     color: #2a4a5e;
     border: 1px solid #1a3a50;
+    border-bottom: none;
     padding: 8px 18px;
+    min-width: 70px;
     font-family: 'Courier New', monospace;
     font-size: 10px;
     letter-spacing: 2px;
@@ -43,11 +48,6 @@ QLabel {
     color: #a0cfe0;
     font-size: 11px;
     font-family: 'Courier New', monospace;
-}
-QLabel#section {
-    color: #2a4a5e;
-    font-size: 9px;
-    letter-spacing: 3px;
 }
 QComboBox {
     background: #040810;
@@ -144,11 +144,11 @@ class SettingsPanel(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("N.O.V.A — Settings")
-        self.setFixedSize(560, 520)
+        self.setMinimumSize(580, 540)
+        self.resize(580, 540)
         self.setStyleSheet(_STYLE)
         self.setWindowFlags(
-            Qt.WindowType.Dialog |
-            Qt.WindowType.WindowCloseButtonHint
+            Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint
         )
 
         from config.user_config import load
@@ -156,14 +156,13 @@ class SettingsPanel(QDialog):
 
         self._build_ui()
 
-    # ── Build UI ───────────────────────────────────────────
+    # ── Build UI ────────────────────────────────────────────
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Header
         header = QWidget()
         header.setFixedHeight(44)
         header.setStyleSheet("background:#050a10; border-bottom:1px solid #1a3a50;")
@@ -175,16 +174,21 @@ class SettingsPanel(QDialog):
         hl.addStretch()
         root.addWidget(header)
 
-        # Tabs
         self._tabs = QTabWidget()
-        self._tabs.addTab(self._tab_ai(),       "AI")
-        self._tabs.addTab(self._tab_voice(),     "VOICE")
-        self._tabs.addTab(self._tab_briefing(),  "BRIEFING")
-        self._tabs.addTab(self._tab_apikeys(),   "API KEYS")
-        self._tabs.addTab(self._tab_general(),   "GENERAL")
+        self._tabs.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._tabs.setDocumentMode(True)
+        self._tabs.setUsesScrollButtons(False)
+        self._tabs.setMovable(False)
+        self._tabs.tabBar().setExpanding(False)
+
+        self._tabs.addTab(self._tab_ai(),      "AI")
+        self._tabs.addTab(self._tab_voice(),   "VOICE")
+        self._tabs.addTab(self._tab_briefing(),"BRIEFING")
+        self._tabs.addTab(self._tab_apikeys(), "API KEYS")
+        self._tabs.addTab(self._tab_general(), "GENERAL")
+
         root.addWidget(self._tabs, 1)
 
-        # Footer buttons
         footer = QWidget()
         footer.setFixedHeight(56)
         footer.setStyleSheet("background:#050a10;border-top:1px solid #1a3a50;")
@@ -200,10 +204,11 @@ class SettingsPanel(QDialog):
         fl.addWidget(save_btn)
         root.addWidget(footer)
 
-    # ── Tab: AI ────────────────────────────────────────────
+    # ── Tab: AI ─────────────────────────────────────────────
 
     def _tab_ai(self) -> QWidget:
-        w = QWidget(); lay = QVBoxLayout(w); lay.setContentsMargins(20, 20, 20, 20); lay.setSpacing(16)
+        w = QWidget(); lay = QVBoxLayout(w)
+        lay.setContentsMargins(20, 20, 20, 20); lay.setSpacing(16)
 
         lay.addWidget(self._section("DEFAULT ENGINE"))
         self._engine_combo = QComboBox()
@@ -224,16 +229,17 @@ class SettingsPanel(QDialog):
         lay.addStretch()
         return w
 
-    # ── Tab: Voice ─────────────────────────────────────────
+    # ── Tab: Voice ──────────────────────────────────────────
 
     def _tab_voice(self) -> QWidget:
-        w = QWidget(); lay = QVBoxLayout(w); lay.setContentsMargins(20, 20, 20, 20); lay.setSpacing(16)
+        w = QWidget(); lay = QVBoxLayout(w)
+        lay.setContentsMargins(20, 20, 20, 20); lay.setSpacing(16)
 
         lay.addWidget(self._section("LANGUAGE"))
         self._lang_combo = QComboBox()
         self._lang_combo.addItems(["en — English", "hi — Hindi", "mr — Marathi"])
         lang_map = {"en": 0, "hi": 1, "mr": 2}
-        self._lang_combo.setCurrentIndex(lang_map.get(self._cfg["voice"].get("language","en"), 0))
+        self._lang_combo.setCurrentIndex(lang_map.get(self._cfg["voice"].get("language", "en"), 0))
         lay.addWidget(self._row("Response language", self._lang_combo))
 
         lay.addWidget(self._divider())
@@ -246,11 +252,8 @@ class SettingsPanel(QDialog):
         lay.addWidget(self._divider())
         lay.addWidget(self._section("MICROPHONE SENSITIVITY"))
         slider_row = QHBoxLayout()
-        self._threshold_slider = QSlider(Qt.Orientation.Horizontal)
-        self._threshold_slider.setRange(200, 2000)
-        threshold = self._cfg["voice"].get("energy_threshold", 600)
-        self._threshold_slider.setValue(threshold)
-        self._threshold_label = QLabel(str(threshold))
+        self._threshold_slider = self._new_slider(200, 2000, self._cfg["voice"].get("energy_threshold", 600))
+        self._threshold_label = QLabel(str(self._threshold_slider.value()))
         self._threshold_label.setFixedWidth(45)
         self._threshold_label.setStyleSheet("color:#00c8ff;")
         self._threshold_slider.valueChanged.connect(
@@ -259,7 +262,8 @@ class SettingsPanel(QDialog):
         slider_row.addWidget(self._threshold_slider)
         slider_row.addWidget(self._threshold_label)
         lay.addLayout(slider_row)
-        note = QLabel("Lower = more sensitive. Higher = ignores background noise. Default: 600")
+
+        note = QLabel("Lower = more sensitive. Higher = ignores background noise. Default: 400")
         note.setStyleSheet("color:#2a4a5e; font-size:9px;")
         lay.addWidget(note)
 
@@ -269,10 +273,11 @@ class SettingsPanel(QDialog):
         lay.addStretch()
         return w
 
-    # ── Tab: Briefing ──────────────────────────────────────
+    # ── Tab: Briefing ───────────────────────────────────────
 
     def _tab_briefing(self) -> QWidget:
-        w = QWidget(); lay = QVBoxLayout(w); lay.setContentsMargins(20, 20, 20, 20); lay.setSpacing(16)
+        w = QWidget(); lay = QVBoxLayout(w)
+        lay.setContentsMargins(20, 20, 20, 20); lay.setSpacing(16)
 
         lay.addWidget(self._section("DAILY BRIEFING TIME"))
         b = self._cfg.get("briefing", {})
@@ -292,10 +297,10 @@ class SettingsPanel(QDialog):
         self._brief_todo     = QCheckBox("To-do list")
         self._brief_news     = QCheckBox("Top news headlines")
 
-        self._brief_weather.setChecked(b.get("weather",  True))
+        self._brief_weather.setChecked(b.get("weather", True))
         self._brief_calendar.setChecked(b.get("calendar", True))
-        self._brief_todo.setChecked(b.get("todo",     True))
-        self._brief_news.setChecked(b.get("news",     False))
+        self._brief_todo.setChecked(b.get("todo", True))
+        self._brief_news.setChecked(b.get("news", False))
 
         for cb in [self._brief_weather, self._brief_calendar,
                    self._brief_todo, self._brief_news]:
@@ -307,10 +312,11 @@ class SettingsPanel(QDialog):
         lay.addStretch()
         return w
 
-    # ── Tab: API Keys ──────────────────────────────────────
+    # ── Tab: API Keys ───────────────────────────────────────
 
     def _tab_apikeys(self) -> QWidget:
-        w = QWidget(); lay = QVBoxLayout(w); lay.setContentsMargins(20, 20, 20, 20); lay.setSpacing(12)
+        w = QWidget(); lay = QVBoxLayout(w)
+        lay.setContentsMargins(20, 20, 20, 20); lay.setSpacing(12)
 
         from config.settings import (
             GEMINI_API_KEY, GROQ_API_KEY, WEATHER_API_KEY,
@@ -318,11 +324,11 @@ class SettingsPanel(QDialog):
         )
 
         keys = [
-            ("Gemini API",       GEMINI_API_KEY,     "aistudio.google.com/app/apikey"),
-            ("Groq API",         GROQ_API_KEY,        "console.groq.com"),
-            ("OpenWeatherMap",   WEATHER_API_KEY,     "openweathermap.org/api"),
-            ("GNews",            NEWS_API_KEY,         "gnews.io"),
-            ("Spotify Client",   SPOTIFY_CLIENT_ID,   "developer.spotify.com/dashboard"),
+            ("Gemini API",     GEMINI_API_KEY,   "aistudio.google.com/app/apikey"),
+            ("Groq API",       GROQ_API_KEY,     "console.groq.com"),
+            ("OpenWeatherMap", WEATHER_API_KEY,  "openweathermap.org/api"),
+            ("GNews",          NEWS_API_KEY,     "gnews.io"),
+            ("Spotify Client", SPOTIFY_CLIENT_ID,"developer.spotify.com/dashboard"),
         ]
 
         lay.addWidget(self._section("KEY STATUS"))
@@ -357,11 +363,13 @@ class SettingsPanel(QDialog):
         lay.addStretch()
         return w
 
-    # ── Tab: General ───────────────────────────────────────
+    # ── Tab: General ─────────────────────────────────────────
 
     def _tab_general(self) -> QWidget:
-        w = QWidget(); lay = QVBoxLayout(w); lay.setContentsMargins(20, 20, 20, 20); lay.setSpacing(16)
+        w = QWidget(); lay = QVBoxLayout(w)
+        lay.setContentsMargins(20, 20, 20, 20); lay.setSpacing(16)
 
+        # ── Window behaviour ──
         lay.addWidget(self._section("WINDOW BEHAVIOUR"))
         self._minimize_tray = QCheckBox("Minimise to tray when window is closed")
         self._minimize_tray.setChecked(
@@ -369,11 +377,21 @@ class SettingsPanel(QDialog):
         )
         lay.addWidget(self._minimize_tray)
 
+        from config.autostart import is_enabled as _autostart_on
+        self._autostart_cb = QCheckBox("Launch NOVA automatically when Windows starts")
+        try:
+            self._autostart_cb.setChecked(_autostart_on())
+        except Exception:
+            self._autostart_cb.setChecked(False)
+        lay.addWidget(self._autostart_cb)
+
         lay.addWidget(self._divider())
+
+        # ── Version info ──
         lay.addWidget(self._section("NOVA VERSION"))
         version_info = [
             ("Version",  "v2.5 — Sprint 4"),
-            ("Python",   f"{__import__('sys').version.split()[0]}"),
+            ("Python",   __import__("sys").version.split()[0]),
             ("Platform", "Windows"),
             ("Log dir",  str(BASE_DIR / "logs")),
         ]
@@ -392,11 +410,16 @@ class SettingsPanel(QDialog):
         open_log_btn.clicked.connect(self._open_latest_log)
         lay.addWidget(open_log_btn)
 
+        # ── Conversation history ──
         lay.addWidget(self._divider())
         lay.addWidget(self._section("CONVERSATION HISTORY"))
-        from core.conversation_log import get_stats
-        stats = get_stats()
-        history_stats = QLabel(f"{stats['total']} messages stored")
+        try:
+            from core.conversation_log import get_stats
+            stats = get_stats()
+            hist_text = f"{stats['total']} messages stored"
+        except Exception:
+            hist_text = "No data yet."
+        history_stats = QLabel(hist_text)
         history_stats.setStyleSheet("color:#2a4a5e; font-size:10px;")
         lay.addWidget(history_stats)
 
@@ -405,24 +428,34 @@ class SettingsPanel(QDialog):
         clear_history_btn.clicked.connect(self._clear_history)
         lay.addWidget(clear_history_btn)
 
+        # ── Performance ──
+        lay.addWidget(self._divider())
+        lay.addWidget(self._section("PERFORMANCE"))
+        try:
+            from core.perf import get_session_stats
+            perf_stats = get_session_stats()
+            if perf_stats and "total" in perf_stats:
+                t = perf_stats["total"]
+                perf_text = (
+                    f"Avg response: {t['avg']:.0f}ms  "
+                    f"(min {t['min']:.0f}ms / max {t['max']:.0f}ms, n={t['count']})"
+                )
+            else:
+                perf_text = "No data yet this session."
+        except Exception:
+            perf_text = "No data yet this session."
+        perf_lbl = QLabel(perf_text)
+        perf_lbl.setStyleSheet("color:#2a4a5e; font-size:10px;")
+        lay.addWidget(perf_lbl)
+
         lay.addStretch()
         return w
 
-    def _clear_history(self) -> None:
-        from core.conversation_log import clear_all
-        count = clear_all()
-        from core.voice import speak
-        speak(f"Cleared {count} stored messages.")
-        self.accept()
-    
-        
-
-    # ── Save & Apply ───────────────────────────────────────
+    # ── Save & Apply ──────────────────────────────────────────
 
     def _save_and_apply(self) -> None:
         from config import user_config as uc
 
-        # ── Read values from UI ──
         lang_text = self._lang_combo.currentText().split(" — ")[0]
         t         = self._briefing_time.time()
         time_str  = f"{t.hour():02d}:{t.minute():02d}"
@@ -451,7 +484,6 @@ class SettingsPanel(QDialog):
 
         uc.save(new_cfg)
 
-        # ── Apply immediately (no restart needed) ──
         uc.apply_engine(new_cfg["ai"]["default_engine"])
         uc.apply_language(new_cfg["voice"]["language"])
         uc.apply_energy_threshold(new_cfg["voice"]["energy_threshold"])
@@ -463,15 +495,27 @@ class SettingsPanel(QDialog):
             "news":     new_cfg["briefing"]["news"],
         })
 
+        try:
+            from config.autostart import enable as _en, disable as _dis
+            if self._autostart_cb.isChecked():
+                _en()
+            else:
+                _dis()
+        except Exception:
+            pass
+
         from core.voice import speak
         speak("Settings saved.")
         self.accept()
 
-    # ── Helper widgets ─────────────────────────────────────
+    # ── Shared helpers (used by every tab builder above) ──────
 
     def _section(self, text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setObjectName("section")
+        lbl.setStyleSheet(
+            "color:#4a6478; font-size:9px; font-weight:700; "
+            "letter-spacing:2px; padding:2px 0px;"
+        )
         return lbl
 
     def _divider(self) -> QFrame:
@@ -487,7 +531,14 @@ class SettingsPanel(QDialog):
         lay.addWidget(lbl); lay.addWidget(widget, 1)
         return w
 
-    # ── Actions ────────────────────────────────────────────
+    def _new_slider(self, minimum: int, maximum: int, value: int):
+        from PyQt6.QtWidgets import QSlider
+        s = QSlider(Qt.Orientation.Horizontal)
+        s.setRange(minimum, maximum)
+        s.setValue(value)
+        return s
+
+    # ── Actions ─────────────────────────────────────────────
 
     def _open_env(self) -> None:
         env_path = BASE_DIR / ".env"
@@ -500,3 +551,13 @@ class SettingsPanel(QDialog):
         logs    = sorted(log_dir.glob("session_*.log"))
         if logs:
             os.startfile(str(logs[-1]))
+
+    def _clear_history(self) -> None:
+        try:
+            from core.conversation_log import clear_all
+            count = clear_all()
+        except Exception:
+            count = 0
+        from core.voice import speak
+        speak(f"Cleared {count} stored messages.")
+        self.accept()

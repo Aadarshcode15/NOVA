@@ -74,7 +74,8 @@ def _fetch_news(category: str = "general") -> None:
         for i, a in enumerate(articles, 1):
             speak(f"Headline {i}. {a['title']}")
     except Exception as e:
-        log.error(f"[News Error] {e}")
+        log.error
+        (f"[News Error] {e}")
         speak("Couldn't fetch the news.")
 
 def handle_news_command(command: str) -> bool:

@@ -60,6 +60,20 @@ def main():
     from core.conversation_log import init_db
     init_db()
 
+    # ── Start proactive system alerts ──
+    from core.alerts import start_alerts
+    start_alerts()
+    log.info("[Alerts] System monitor active.")
+
+    # ── Build behavioral brain context from history ──
+    # Runs in background so startup isn't delayed
+    import threading as _t
+    _t.Thread(
+        target=lambda: __import__('core.brain', fromlist=['build_behavioral_context'])
+                       .build_behavioral_context(),
+        daemon=True, name="Brain-Builder"
+    ).start()
+
     # ── Start proactive briefing scheduler ──
     from memory.proactive import start_briefing_scheduler
     start_briefing_scheduler()
@@ -91,6 +105,9 @@ def main():
 
     from core.engine import log_engine_stats
     log_engine_stats()
+
+    from core.perf import log_session_stats
+    log_session_stats()
 
     sys.exit(exit_code)
 

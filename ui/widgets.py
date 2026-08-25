@@ -1,8 +1,12 @@
 # ui/widgets.py
 import math
 import random
-import psutil
 import time
+import platform
+import subprocess
+from datetime import datetime
+
+import psutil
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QProgressBar
 from PyQt6.QtCore    import Qt, QTimer, QRectF, QPointF
 from PyQt6.QtGui     import (
@@ -14,12 +18,12 @@ from config.settings import C_NOVA, C_SORA, C_DIM, C_DIM_TXT
 def _hex(c): return QColor(c)
 
 # ═══════════════════════════════════════════════════════════
-# CIRCULAR VISUALIZER  (Mark-XXXIX style)
+# CIRCULAR VISUALIZER
 # ═══════════════════════════════════════════════════════════
 class CircularVisualizer(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(520, 520)
+        self.setMinimumSize(480, 480)
         self._state     = "idle"
         self._assistant = "nova"
         self._phase     = 0.0
@@ -79,7 +83,6 @@ class CircularVisualizer(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         col = self._color()
 
-        # ── Background glow ──
         if self._state != "idle":
             g = QRadialGradient(cx, cy, 230)
             gc = QColor(col); gc.setAlpha(20 if self._state == "thinking" else 35)
@@ -87,7 +90,6 @@ class CircularVisualizer(QWidget):
             p.setBrush(QBrush(g)); p.setPen(Qt.PenStyle.NoPen)
             p.drawEllipse(QRectF(cx-240, cy-240, 480, 480))
 
-        # ── Outer square bracket corners ──
         bc = QColor(col); bc.setAlpha(60)
         p.setPen(QPen(bc, 1)); p.setBrush(Qt.BrushStyle.NoBrush)
         for ox, oy in [(-260,-260),(260,-260),(-260,260),(260,260)]:
@@ -96,13 +98,11 @@ class CircularVisualizer(QWidget):
             p.drawLine(int(bx), int(by), int(bx+sl*dx), int(by))
             p.drawLine(int(bx), int(by), int(bx), int(by+sl*dy))
 
-        # ── Crosshairs ──
         cc = QColor(col); cc.setAlpha(20)
         p.setPen(QPen(cc, 1))
         p.drawLine(int(cx-270), int(cy), int(cx+270), int(cy))
         p.drawLine(int(cx), int(cy-270), int(cx), int(cy+270))
 
-        # ── Tick marks on outermost ring ──
         for i in range(72):
             ang = math.radians(i * 5)
             r1, r2 = 245, 250 if i % 3 == 0 else 247
@@ -112,7 +112,6 @@ class CircularVisualizer(QWidget):
             p.setPen(QPen(tc, 1))
             p.drawLine(int(x1), int(y1), int(x2), int(y2))
 
-        # ── Rotating dashed rings ──
         for i, ring in enumerate(self._rings):
             rc = QColor(col)
             rc.setAlpha(ring["alpha"] if self._state != "idle" else ring["alpha"] // 3)
@@ -124,7 +123,6 @@ class CircularVisualizer(QWidget):
             r = ring["r"]
             p.drawEllipse(QRectF(cx-r, cy-r, r*2, r*2))
 
-        # ── Radial bars ──
         N = len(self._bars); IR = 105; MH = 60
         for i, val in enumerate(self._bars):
             ang = math.radians((360 / N) * i - 90)
@@ -135,7 +133,6 @@ class CircularVisualizer(QWidget):
             p.setPen(QPen(bc2, 1.5))
             p.drawLine(int(x1), int(y1), int(x2), int(y2))
 
-        # ── Inner filled circle ──
         g2 = QRadialGradient(cx, cy, 100)
         bg = QColor("#010810")
         g2.setColorAt(0, bg); g2.setColorAt(0.75, bg)
@@ -145,7 +142,6 @@ class CircularVisualizer(QWidget):
         p.setPen(QPen(rc3, 1))
         p.drawEllipse(QRectF(cx-100, cy-100, 200, 200))
 
-        # ── Inner ring detail ──
         for i in range(36):
             ang = math.radians(i * 10 + self._phase * 5)
             r1, r2 = 90, 95
@@ -155,16 +151,22 @@ class CircularVisualizer(QWidget):
             p.setPen(QPen(ic, 1))
             p.drawLine(int(x1), int(y1), int(x2), int(y2))
 
-        # ── Assistant name ──
         name = "N.O.V.A" if self._assistant == "nova" else "S.O.R.A"
-        font = QFont("Courier New", 15, QFont.Weight.Bold)
+        font = QFont("Segoe UI", 17, QFont.Weight.Bold)
         font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 7)
         p.setFont(font)
-        nc = QColor(col); nc.setAlpha(220)
+        nc = QColor(col); nc.setAlpha(230)
         p.setPen(nc)
-        p.drawText(QRectF(cx-90, cy-14, 180, 28), Qt.AlignmentFlag.AlignCenter, name)
+        p.drawText(QRectF(cx-110, cy-26, 220, 26), Qt.AlignmentFlag.AlignCenter, name)
 
-        # ── Orbiting dots ──
+        sub_font = QFont("Segoe UI", 8, QFont.Weight.DemiBold)
+        sub_font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 2)
+        p.setFont(sub_font)
+        sc = QColor(col); sc.setAlpha(140)
+        p.setPen(sc)
+        p.drawText(QRectF(cx-110, cy+4, 220, 14), Qt.AlignmentFlag.AlignCenter, "NEURAL OPERATIVE")
+        p.drawText(QRectF(cx-110, cy+16, 220, 14), Qt.AlignmentFlag.AlignCenter, "VIRTUAL ASSISTANT")
+
         for d in self._dots:
             ang = math.radians(d["angle"])
             dx  = cx + math.cos(ang) * d["r"]
@@ -174,7 +176,6 @@ class CircularVisualizer(QWidget):
             dr = d["size"] + pulse * 2
             p.setBrush(QBrush(dc)); p.setPen(Qt.PenStyle.NoPen)
             p.drawEllipse(QPointF(dx, dy), dr, dr)
-            # Dot trail
             for t in range(3):
                 ta = math.radians(d["angle"] - (t+1) * 4)
                 tx = cx + math.cos(ta) * d["r"]
@@ -192,11 +193,11 @@ class CircularVisualizer(QWidget):
 class WaveformBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(45)
+        self.setFixedHeight(42)
         self._state     = "idle"
         self._assistant = "nova"
         self._phase     = 0.0
-        self._bars      = [0.0] * 48
+        self._bars      = [0.0] * 64
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(35)
@@ -241,61 +242,69 @@ class WaveformBar(QWidget):
 
 
 # ═══════════════════════════════════════════════════════════
-# SYSTEM MONITOR
+# SYSTEM MONITOR — 5 bars + UP/PROC/OS row
 # ═══════════════════════════════════════════════════════════
 class SystemMonitor(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(5)
+        self._layout.setSpacing(6)
         self._bars  = {}
         self._vals  = {}
         self._start = time.time()
 
         stats = [
-            ("CPU", "#00c8ff", "%"),
-            ("MEM", "#f0a500", "%"),
-            ("NET", "#00ff88", "KB/s"),
-            ("GPU", "#ff6b35", "%"),
+            ("CPU",     "#00d4ff", "%",    "⚡"),
+            ("MEMORY",  "#fbbf24", "%",    "💾"),
+            ("NETWORK", "#22c55e", "KB/s", "📶"),
+            ("GPU",     "#fb7185", "%",    "🎮"),
+            ("TEMP",    "#f43f5e", "°C",   "🌡"),
         ]
-        for name, color, unit in stats:
+        for name, color, unit, icon in stats:
             row = QWidget()
             rl  = QHBoxLayout(row)
             rl.setContentsMargins(0, 0, 0, 0)
-            rl.setSpacing(4)
+            rl.setSpacing(6)
+            icon_lbl = QLabel(icon)
+            icon_lbl.setFixedWidth(16)
+            icon_lbl.setStyleSheet("font-size:10px;")
             nl = QLabel(name)
-            nl.setStyleSheet(f"color: #2a4a5e; font-size: 8px; letter-spacing: 2px;")
-            nl.setFixedWidth(28)
+            nl.setStyleSheet("color:#5a7a90; font-size:8px; font-weight:700; letter-spacing:1px;")
+            nl.setFixedWidth(54)
             vl = QLabel(f"0{unit}")
-            vl.setStyleSheet(f"color: {color}; font-size: 10px; font-weight: bold;")
-            vl.setFixedWidth(52)
+            vl.setStyleSheet(f"color:{color}; font-size:10px; font-weight:700;")
+            vl.setFixedWidth(56)
             vl.setAlignment(Qt.AlignmentFlag.AlignRight)
             bar = QProgressBar()
             bar.setRange(0, 100); bar.setValue(0)
-            bar.setTextVisible(False); bar.setFixedHeight(3)
+            bar.setTextVisible(False); bar.setFixedHeight(4)
             bar.setStyleSheet(
-                f"QProgressBar{{background:#0d2535;border:none;border-radius:1px;}}"
-                f"QProgressBar::chunk{{background:{color};border-radius:1px;}}"
+                f"QProgressBar{{background:#0d1f2e;border:none;border-radius:2px;}}"
+                f"QProgressBar::chunk{{background:{color};border-radius:2px;}}"
             )
-            rl.addWidget(nl); rl.addWidget(bar, 1); rl.addWidget(vl)
+            rl.addWidget(icon_lbl); rl.addWidget(nl); rl.addWidget(bar, 1); rl.addWidget(vl)
             self._bars[name] = bar
-            self._vals[name] = (vl, unit)
+            self._vals[name] = (vl, unit, color)
             self._layout.addWidget(row)
 
+        from PyQt6.QtWidgets import QFrame
+        div = QFrame(); div.setFrameShape(QFrame.Shape.HLine)
+        div.setStyleSheet("background:#122638; max-height:1px; border:none; margin-top:4px; margin-bottom:4px;")
+        self._layout.addWidget(div)
+
+        bottom_row = QHBoxLayout(); bottom_row.setSpacing(0)
         self._extra = {}
-        for key, color in [("TMP","#ff3355"),("UP","#00ff88"),("PROC","#a0cfe0"),("OS","#a0cfe0")]:
-            row = QWidget()
-            rl  = QHBoxLayout(row)
-            rl.setContentsMargins(0, 0, 0, 0); rl.setSpacing(4)
-            kl = QLabel(key)
-            kl.setStyleSheet("color: #2a4a5e; font-size: 8px; letter-spacing: 2px;")
-            kl.setFixedWidth(28)
+        for key, label in [("UP", "UP TIME"), ("PROC", "PROCESSES"), ("OS", "OS")]:
+            col = QVBoxLayout(); col.setSpacing(2)
+            kl = QLabel(label)
+            kl.setStyleSheet("color:#3c5a70; font-size:7px; letter-spacing:1px;")
             vl = QLabel("—")
-            vl.setStyleSheet(f"color: {color}; font-size: 10px; font-weight: bold;")
-            rl.addWidget(kl); rl.addWidget(vl)
+            vl.setStyleSheet("color:#c5dce8; font-size:11px; font-weight:700;")
+            col.addWidget(kl); col.addWidget(vl)
             self._extra[key] = vl
-            self._layout.addWidget(row)
+            bottom_row.addLayout(col)
+        self._layout.addLayout(bottom_row)
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._update)
@@ -308,39 +317,93 @@ class SystemMonitor(QWidget):
             mem = psutil.virtual_memory().percent
             gpu = 0
             try:
-                import subprocess
                 r = subprocess.run(
-                    ["nvidia-smi","--query-gpu=utilization.gpu","--format=csv,noheader,nounits"],
+                    ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
                     capture_output=True, text=True, timeout=1)
                 if r.returncode == 0: gpu = int(r.stdout.strip())
-            except: pass
-
-            self._bars["CPU"].setValue(int(cpu))
-            self._bars["MEM"].setValue(int(mem))
-            self._bars["GPU"].setValue(int(gpu))
-            self._vals["CPU"][0].setText(f"{int(cpu)}%")
-            self._vals["MEM"][0].setText(f"{int(mem)}%")
-            self._vals["GPU"][0].setText(f"{int(gpu)}%")
+            except Exception:
+                pass
 
             net2 = psutil.net_io_counters()
             skb  = round(net2.bytes_sent / 1024, 1)
-            self._vals["NET"][0].setText(f"{skb}KB/s")
-            self._bars["NET"].setValue(min(100, int(skb / 5)))
 
+            temp_c = 0
             try:
                 temps = psutil.sensors_temperatures()
                 if temps:
-                    t = list(temps.values())[0][0].current
-                    self._extra["TMP"].setText(f"{t:.0f}°C")
-                else:
-                    self._extra["TMP"].setText("N/A")
-            except: self._extra["TMP"].setText("N/A")
+                    temp_c = list(temps.values())[0][0].current
+            except Exception:
+                pass
+
+            self._bars["CPU"].setValue(int(cpu))
+            self._bars["MEMORY"].setValue(int(mem))
+            self._bars["NETWORK"].setValue(min(100, int(skb / 5)))
+            self._bars["GPU"].setValue(int(gpu))
+            self._bars["TEMP"].setValue(min(100, int(temp_c)))
+
+            self._vals["CPU"][0].setText(f"{int(cpu)}%")
+            self._vals["MEMORY"][0].setText(f"{int(mem)}%")
+            self._vals["NETWORK"][0].setText(f"{skb}KB/s")
+            self._vals["GPU"][0].setText(f"{int(gpu)}%")
+            self._vals["TEMP"][0].setText(f"{temp_c:.0f}°C" if temp_c else "N/A")
+
+            temp_color = "#22c55e" if temp_c < 60 else ("#fbbf24" if temp_c < 80 else "#f43f5e")
+            self._bars["TEMP"].setStyleSheet(
+                f"QProgressBar{{background:#0d1f2e;border:none;border-radius:2px;}}"
+                f"QProgressBar::chunk{{background:{temp_color};border-radius:2px;}}"
+            )
+            self._vals["TEMP"][0].setStyleSheet(f"color:{temp_color}; font-size:10px; font-weight:700;")
 
             up = int(time.time() - self._start)
-            h, m, s = up//3600, (up%3600)//60, up%60
+            h, m, s = up // 3600, (up % 3600) // 60, up % 60
             self._extra["UP"].setText(f"{h:02d}:{m:02d}:{s:02d}")
             self._extra["PROC"].setText(str(len(list(psutil.process_iter()))))
-            import platform
             self._extra["OS"].setText(platform.system().upper()[:3])
         except Exception as e:
-            print(f"[SysMonitor] {e}")
+            from core.logger import log
+            log.debug(f"[SysMonitor] {e}")
+
+
+# ═══════════════════════════════════════════════════════════
+# ACTIVITY LOG ENTRY — icon + timestamp + tag badge + message
+# ═══════════════════════════════════════════════════════════
+class LogEntry(QWidget):
+    _TAG_STYLES = {
+        "nova": ("NOVA",   "#00d4ff", "◎"),
+        "sora": ("SORA",   "#c084fc", "◎"),
+        "user": ("USER",   "#22c55e", "✦"),
+        "sys":  ("SYSTEM", "#fbbf24", "⚙"),
+    }
+
+    def __init__(self, who: str, text: str, parent=None):
+        super().__init__(parent)
+        tag, color, icon = self._TAG_STYLES.get(who, ("SYSTEM", "#5a7a90", "•"))
+        ts = datetime.now().strftime("%H:%M:%S")
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(2, 4, 2, 4)
+        lay.setSpacing(8)
+
+        icon_lbl = QLabel(icon)
+        icon_lbl.setFixedWidth(16)
+        icon_lbl.setStyleSheet(f"color:{color}; font-size:11px;")
+        lay.addWidget(icon_lbl)
+
+        ts_lbl = QLabel(f"[{ts}]")
+        ts_lbl.setFixedWidth(62)
+        ts_lbl.setStyleSheet("color:#3c5a70; font-size:9px;")
+        lay.addWidget(ts_lbl)
+
+        tag_lbl = QLabel(tag)
+        tag_lbl.setFixedWidth(58)
+        tag_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        tag_lbl.setStyleSheet(
+            f"background:{color}22; border:1px solid {color}55; border-radius:4px;"
+            f"color:{color}; font-size:8px; font-weight:700; padding:2px 4px;"
+        )
+        lay.addWidget(tag_lbl)
+
+        msg_lbl = QLabel(text)
+        msg_lbl.setWordWrap(True)
+        msg_lbl.setStyleSheet("color:#b8d4e6; font-size:10px;")
+        lay.addWidget(msg_lbl, 1)

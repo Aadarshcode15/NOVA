@@ -44,13 +44,17 @@ def handle_search(command: str) -> bool:
             results = list(DDGS().text(search_q, max_results=3))
             if results:
                 context = "\n".join([r.get("body", "") for r in results])
-                # REPLACE:
-                answer  = query(
-                    f"Based on this search result, answer in 2-3 spoken sentences "
-                    f"(no markdown, no bullet points):\n"
+                from core.engine import raw_query
+                answer = raw_query(
+                    f"Answer this question in 2-3 spoken sentences based only on the "
+                    f"search results below. No markdown, no bullet points.\n"
                     f"Question: {search_q}\n"
                     f"Search results: {context[:2000]}",
-                    skip_history=True      # internal call — don't pollute conversation
+                    system=(
+                        "You are a factual assistant. Answer the question using only "
+                        "the provided search results. Do not mention the user's personal "
+                        "information. Be concise and spoken-friendly."
+                    )
                 )
                 speak(answer)
             else:

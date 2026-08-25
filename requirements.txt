@@ -23,6 +23,7 @@ psutil
 screen-brightness-control
 pyperclip
 pycaw
+word2number
 
 # ── Notifications ───────────────────────────────────────────
 win10toast
@@ -60,3 +61,10 @@ google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
 dateparser
+
+# ── Document OCR (Sprint 4 features) ─────────────────────────
+PyMuPDF           # PDF→image conversion for scanned PDF OCR
+pytesseract       # Python wrapper for Tesseract OCR engine
+python-docx       # Word .docx text + table extraction
+openpyxl          # Excel .xlsx cell reading
+pdfplumber        # Better PDF text extraction than pypdf
